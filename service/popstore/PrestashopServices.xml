@@ -1,0 +1,317 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+This software is in the public domain under CC0 1.0 Universal plus a
+Grant of Patent License.
+
+To the extent possible under law, the author(s) have dedicated all
+copyright and related and neighboring rights to this software to the
+public domain worldwide. This software is distributed without any
+warranty.
+
+You should have received a copy of the CC0 Public Domain Dedication
+along with this software (see the LICENSE.md file). If not, see
+<http://creativecommons.org/publicdomain/zero/1.0/>.
+-->
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+    <service verb="get" noun="LightBootstrap">
+        <in-parameters>
+            <parameter name="menu_with_images"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="code" type="Integer"/>
+            <parameter name="psdata" type="Map"/>
+        </out-parameters>
+        <actions>
+            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopLightBootstrap.json',false))"/>
+            <set field="code" from="data?.code"/>
+            <set field="success" from="data?.success"/>
+            <set field="psdata" from="data?.psdata"/>
+
+            <log level="warn" message="get#LightBootstrap"/>
+        </actions>
+    </service>
+    <service verb="get" noun="FeaturedProducts">
+        <in-parameters>
+            <parameter name="with_all_images"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="code" type="Integer"/>
+            <parameter name="psdata" type="Map"/>
+        </out-parameters>
+        <actions>
+            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopFeaturedProducts.json',false))"/>
+            <set field="code" from="data?.code"/>
+            <set field="success" from="data?.success"/>
+            <set field="psdata" from="data?.psdata"/>
+            <log level="warn" message="get#FeaturedProducts"/>
+        </actions>
+    </service>
+    <service verb="get" noun="CategoryProducts">
+        <in-parameters>
+            <parameter name="id_category"/>
+            <parameter name="page"/>
+            <parameter name="with_all_images"/>
+            <parameter name="image_size"/>
+            <parameter name="slug"/>
+            <parameter name="resultsPerPage"/>
+            <parameter name="with_category_tree"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="code" type="Integer"/>
+            <parameter name="psdata" type="Map"/>
+        </out-parameters>
+        <actions>
+            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopCategoryProducts.json',false))"/>
+            <set field="code" from="data?.code"/>
+            <set field="success" from="data?.success"/>
+            <set field="psdata" from="data?.psdata"/>
+            <log level="warn" message="get#CategoryProducts"/>
+        </actions>
+    </service>
+    <service verb="get" noun="ProductDetail">
+        <in-parameters>
+            <!-- Prestashop Only API Attributes -->
+            <parameter name="product_id"/>
+            <parameter name="image_type"/>
+            <parameter name="refresh"/>
+            <parameter name="id_customization"/>
+            <parameter name="group"/>
+            <parameter name="with_all_images"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="code" type="Integer"/>
+            <parameter name="psdata" type="Map"/>
+        </out-parameters>
+        <actions>
+            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopProductDetail.json',false))"/>
+            <set field="code" from="data?.code"/>
+            <set field="success" from="data?.success"/>
+            <set field="psdata" from="data?.psdata"/>
+            <log level="warn" message="get#ProductDetail"/>
+        </actions>
+    </service>
+    <service verb="list" noun="Comments">
+        <in-parameters>
+            <!-- Prestashop Only API Attributes -->
+            <parameter name="id_product"/>
+            <parameter name="page"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="code" type="Integer"/>
+            <parameter name="psdata" type="Map"/>
+        </out-parameters>
+        <actions>
+            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopListComments.json',false))"/>
+            <set field="code" from="data?.code"/>
+            <set field="success" from="data?.success"/>
+            <set field="psdata" from="data?.psdata"/>
+            <log level="warn" message="list#Comments"/>
+        </actions>
+    </service>
+    <service verb="get" noun="ProductSearch">
+        <in-parameters>
+            <!-- Prestashop Only API Attributes -->
+            <parameter name="s"/>
+            <parameter name="resultsPerPage"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="code" type="Integer"/>
+            <parameter name="psdata" type="Map"/>
+        </out-parameters>
+        <actions>
+            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopProductSearch.json',false))"/>
+            <set field="code" from="data?.code"/>
+            <set field="success" from="data?.success"/>
+            <set field="psdata" from="data?.psdata"/>
+            <log level="warn" message="get#ProductSearch"/>
+        </actions>
+    </service>
+    <service verb="get" noun="AddressForm">
+        <in-parameters>
+            <!-- Prestashop Only API Attributes -->
+            <parameter name="s"/>
+            <parameter name="resultsPerPage"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="code" type="Integer"/>
+            <parameter name="psdata" type="Map"/>
+        </out-parameters>
+        <actions>
+            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopAddressForm.json',false))"/>
+            <set field="code" from="data?.code"/>
+            <set field="success" from="data?.success"/>
+            <set field="psdata" from="data?.psdata"/>
+            <log level="warn" message="get#AddressForm"/>
+        </actions>
+    </service>
+
+    <service verb="get" noun="Cart">
+        <in-parameters>
+            <parameter name="image_size" default-value="medium_default"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="code" type="Integer"/>
+            <parameter name="psdata" type="Map"/>
+        </out-parameters>
+        <actions>
+            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopCart.json',false))"/>
+            <set field="code" from="data?.code"/>
+            <set field="success" from="data?.success"/>
+            <set field="psdata" from="data?.psdata"/>
+            <log level="warn" message="get#Cart"/>
+        </actions>
+    </service>
+    <service verb="get" noun="AccountInfo">
+        <in-parameters>
+            <parameter name="menu_with_images"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="code" type="Integer"/>
+            <parameter name="psdata" type="Map"/>
+        </out-parameters>
+        <actions>
+            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopAccountInfo.json',false))"/>
+            <set field="code" from="data?.code"/>
+            <set field="success" from="data?.success"/>
+            <set field="psdata" from="data?.psdata"/>
+            <log level="warn" message="get#AccountInfo"/>
+        </actions>
+    </service>
+    <service verb="post" noun="AccountEdit">
+        <in-parameters>
+            <!-- Prestashop Only API Attributes -->
+            <parameter name="email"><text-email/></parameter>
+            <parameter name="firstName"/>
+            <parameter name="lastName"/>
+            <parameter name="password"/>
+            <parameter name="gender"/>
+            <parameter name="new_password"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="code" type="Integer"/>
+            <parameter name="psdata" type="Map"/>
+        </out-parameters>
+        <actions>
+            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopAccountEdit.json',false))"/>
+            <set field="code" from="data?.code"/>
+            <set field="success" from="data?.success"/>
+            <set field="psdata" from="data?.psdata"/>
+            <log level="warn" message="get#AccountEdit"/>
+        </actions>
+    </service>
+    <service verb="post" noun="Address">
+        <in-parameters>
+            <!-- Prestashop Only API Attributes -->
+            <parameter name="alias"/>
+            <parameter name="postcode"/>
+            <parameter name="address1"/>
+            <parameter name="id_country"/>
+            <parameter name="country"/>
+            <parameter name="id_state"/>
+            <parameter name="city"/>
+            <parameter name="company"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="code" type="Integer"/>
+            <parameter name="psdata" type="Map"/>
+        </out-parameters>
+        <actions>
+            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopAddress.json',false))"/>
+            <set field="code" from="data?.code"/>
+            <set field="success" from="data?.success"/>
+            <set field="psdata" from="data?.psdata"/>
+            <log level="warn" message="get#AccountEdit"/>
+        </actions>
+    </service>
+    <service verb="get" noun="OrderHistory">
+        <in-parameters>
+            <parameter name="menu_with_images"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="code" type="Integer"/>
+            <parameter name="psdata" type="Map"/>
+        </out-parameters>
+        <actions>
+            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopOrderHistory.json',false))"/>
+            <set field="code" from="data?.code"/>
+            <set field="success" from="data?.success"/>
+            <set field="psdata" from="data?.psdata"/>
+            <log level="warn" message="get#OrderHistory"/>
+        </actions>
+    </service>
+    <service verb="get" noun="AllAddresses">
+        <in-parameters>
+            <parameter name="menu_with_images"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="code" type="Integer"/>
+            <parameter name="psdata" type="Map"/>
+        </out-parameters>
+        <actions>
+            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopAllAddresses.json',false))"/>
+            <set field="code" from="data?.code"/>
+            <set field="success" from="data?.success"/>
+            <set field="psdata" from="data?.psdata"/>
+            <log level="warn" message="get#AllAddresses"/>
+        </actions>
+    </service>
+    <service verb="register" noun="Customer" authenticate="anonymous-all">
+        <in-parameters>
+            <!-- Prestashop Only API Attributes -->
+            <parameter name="email"><text-email/></parameter>
+            <parameter name="firstName"/>
+            <parameter name="lastName"/>
+            <parameter name="password"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="code" type="Integer"/>
+            <parameter name="psdata" type="Map"/>
+        </out-parameters>
+        <actions>
+            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopRegister.json',false))"/>
+            <set field="code" from="data?.code"/>
+            <set field="success" from="data?.success"/>
+            <set field="psdata" from="data?.psdata"/>
+            <log level="warn" message="register#Customer ${data}"/>
+        </actions>
+    </service>
+    <service verb="login" noun="Customer">
+        <in-parameters>
+            <parameter name="email"><text-email/></parameter>
+            <parameter name="username" required="true" default="email"/>
+            <parameter name="password" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="code" type="Integer"/>
+            <parameter name="psdata" type="Map"/>
+        </out-parameters>
+        <actions>
+            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopLogin.json',false))"/>
+            <set field="code" from="data?.code"/>
+            <set field="success" from="data?.success"/>
+            <set field="psdata" from="data?.psdata"/>
+        </actions>
+    </service>
+    <service verb="logout" noun="Customer" authenticate="anonymous-all">
+        <actions>
+            <script>ec.user.logoutUser()</script>
+        </actions>
+    </service>
+
+</services>
+
