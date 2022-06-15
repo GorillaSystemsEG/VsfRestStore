@@ -28,6 +28,10 @@ along with this software (see the LICENSE.md file). If not, see
 
     <mantle.product.category.ProductCategory productCategoryId="DEMO_CLOTHING" productCategoryTypeEnumId="PctCatalog" categoryName="Clothing" description=""/>
     <mantle.product.category.ProductCategoryRollup productCategoryId="DEMO_CLOTHING" parentProductCategoryId="PopcBrowseRoot" fromDate="1265184000000" sequenceNum="1"/>
+    <mantle.product.category.ProductCategory productCategoryId="DEMO_CLOTHING_WOMENS" productCategoryTypeEnumId="PctCatalog" categoryName="Women's Clothing" description=""/>
+    <mantle.product.category.ProductCategoryRollup productCategoryId="DEMO_CLOTHING_WOMENS" parentProductCategoryId="DEMO_CLOTHING" fromDate="1265184000000" sequenceNum="1"/>
+    <mantle.product.category.ProductCategory productCategoryId="DEMO_CLOTHING_MENS" productCategoryTypeEnumId="PctCatalog" categoryName="Man's Clothing" description=""/>
+    <mantle.product.category.ProductCategoryRollup productCategoryId="DEMO_CLOTHING_MENS" parentProductCategoryId="DEMO_CLOTHING" fromDate="1265184000000" sequenceNum="1"/>
     <mantle.product.category.ProductCategory productCategoryId="DEMO_OFFICE" productCategoryTypeEnumId="PctCatalog" categoryName="Office" description=""/>
     <mantle.product.category.ProductCategoryRollup productCategoryId="DEMO_OFFICE" parentProductCategoryId="PopcBrowseRoot" fromDate="1265184000000" sequenceNum="2"/>
 
@@ -45,6 +49,7 @@ along with this software (see the LICENSE.md file). If not, see
         <categories productCategoryId="PopcNew" fromDate="1265184000000" sequenceNum="1"/>
         <categories productCategoryId="PopcFeatured" fromDate="1265184000000" sequenceNum="6"/>
         <categories productCategoryId="DEMO_CLOTHING" fromDate="1265184000000" sequenceNum="1"/>
+        <categories productCategoryId="DEMO_CLOTHING_MENS" fromDate="1265184000000" sequenceNum="1"/>
         <dimensions dimensionTypeId="ShippingWeight" value="0.75" valueUomId="WT_lb"/>
 
         <features productFeatureId="SizeSmall" sequenceNum="1" applTypeEnumId="PfatSelectable" fromDate="1265184000000"/>
@@ -81,6 +86,7 @@ along with this software (see the LICENSE.md file). If not, see
         <categories productCategoryId="PopcDeals" fromDate="1265184000000" sequenceNum="2"/>
         <categories productCategoryId="PopcFeatured" fromDate="1265184000000" sequenceNum="5"/>
         <categories productCategoryId="DEMO_CLOTHING" fromDate="1265184000000" sequenceNum="2"/>
+        <categories productCategoryId="DEMO_CLOTHING_WOMENS" fromDate="1265184000000" sequenceNum="1"/>
         <dimensions dimensionTypeId="ShippingWeight" value="0.75" valueUomId="WT_lb"/>
 
         <features productFeatureId="ColorBlack" sequenceNum="1" applTypeEnumId="PfatSelectable" fromDate="1265184000000"/>
@@ -120,6 +126,8 @@ along with this software (see the LICENSE.md file). If not, see
         <categories productCategoryId="PopcDeals" fromDate="1265184000000" sequenceNum="3"/>
         <categories productCategoryId="PopcFeatured" fromDate="1265184000000" sequenceNum="4"/>
         <categories productCategoryId="DEMO_CLOTHING" fromDate="1265184000000" sequenceNum="3"/>
+        <categories productCategoryId="DEMO_CLOTHING_MENS" fromDate="1265184000000" sequenceNum="3"/>
+        <categories productCategoryId="DEMO_CLOTHING_WOMENS" fromDate="1265184000000" sequenceNum="3"/>
         <dimensions dimensionTypeId="ShippingWeight" value="0.25" valueUomId="WT_lb"/>
 
         <contents productContentId="DEMO_HOOD_DL" productContentTypeEnumId="PcntDescriptionLong" locale="en_US"
@@ -148,6 +156,8 @@ along with this software (see the LICENSE.md file). If not, see
         <categories productCategoryId="PopcDeals" fromDate="1265184000000" sequenceNum="4"/>
         <categories productCategoryId="PopcFeatured" fromDate="1265184000000" sequenceNum="3"/>
         <categories productCategoryId="DEMO_CLOTHING" fromDate="1265184000000" sequenceNum="4"/>
+        <categories productCategoryId="DEMO_CLOTHING_MENS" fromDate="1265184000000" sequenceNum="4"/>
+        <categories productCategoryId="DEMO_CLOTHING_WOMENS" fromDate="1265184000000" sequenceNum="4"/>
         <dimensions dimensionTypeId="ShippingWeight" value="0.5" valueUomId="WT_lb"/>
 
         <contents productContentId="DEMO_BCAP_DL" productContentTypeEnumId="PcntDescriptionLong" locale="en_US"
@@ -210,7 +220,7 @@ along with this software (see the LICENSE.md file). If not, see
     <moqui.resource.DbResourceFile resourceId="DEMO_USB32G_DL" rootVersionName="01" mimeType="text/html" versionName="01">
         <fileData><![CDATA[PHA+SGlnaC1xdWFsaXR5IG1ldGFsIGNhc2luZyBmb3IgZHVyYWJpbGl0eTwvcD4NCg0KPHA+TkFORCBGbGFzaCBUZWNobm9sb2d5PC9wPg0KDQo8cD5XYXRlciBwcm9vZiwgU2hvY2sgcHJvb2YsIG1hZ25ldCBwcm9vZiwgdGVtcCBwcm9vZiBhbmQgWC1yYXkgcHJvb2Ygd2l0aCBhIDUteWVhcnMgd2FycmFudHk8L3A+DQoNCjxwPkhpZ2gtc3BlZWQgVVNCIDMuMCBmbGFzaCBkcml2ZSBmb3IgZmFzdCBkYXRhIHRyYW5zZmVyPC9wPg0KDQo8cD5PcGVyYXRpbmcgdGVtcGVyYXR1cmUgaXMgbWludXMgMTAgdG8gNzAgZGVncmVlIENlbHNpdXM8L3A+]]></fileData>
     </moqui.resource.DbResourceFile>
-    
+
     <!-- Coffee Mug -->
     <mantle.product.Product productId="DEMO_CMUG" productTypeEnumId="PtAsset" assetTypeEnumId="AstTpInventory" assetClassEnumId="AsClsInventoryFin"
             chargeShipping="Y" returnable="Y" productName="Coffee Mug" description="">

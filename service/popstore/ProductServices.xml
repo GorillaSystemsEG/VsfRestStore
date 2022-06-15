@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-This software is in the public domain under CC0 1.0 Universal plus a 
+This software is in the public domain under CC0 1.0 Universal plus a
 Grant of Patent License.
 
 To the extent possible under law, the author(s) have dedicated all
@@ -445,16 +445,16 @@ along with this software (see the LICENSE.md file). If not, see
                     </entity-find-one>
 
                     <!-- Find variant contents -->
-                    <service-call name="popstore.ProductServices.find#ProductContentList" out-map="context" 
+                    <service-call name="popstore.ProductServices.find#ProductContentList" out-map="context"
                         in-map="[productId:variantProductAssoc.toProductId]"/>
 
                     <!-- Find product sales dates -->
                     <service-call name="popstore.ProductServices.find#ProductSalesDates" out-map="context"
                         in-map="[productId:variantProductAssoc.toProductId]"/>
 
-                    <set field="item" from="[enumId:featureType.enumId, enumTypeId:featureType.enumTypeId, 
-                        description:featureType.description, lastUpdatedStamp:featureType.lastUpdatedStamp]"/> 
-                    <set field="content" from="[productFeatureTypeEnumId:productFeature.productFeatureTypeEnumId, 
+                    <set field="item" from="[enumId:featureType.enumId, enumTypeId:featureType.enumTypeId,
+                        description:featureType.description, lastUpdatedStamp:featureType.lastUpdatedStamp]"/>
+                    <set field="content" from="[productFeatureTypeEnumId:productFeature.productFeatureTypeEnumId,
                         description:featureType.description]"/>
                     <script><![CDATA[
                         selectedPrices = (priceSet.price != null && priceSet != 0) ? priceSet : mainPriceSet
@@ -462,12 +462,12 @@ along with this software (see the LICENSE.md file). If not, see
                         if (!isDiscounted) {
                             isDiscounted = (selectedPrices.price && selectedPrices.listPrice) ? selectedPrices.price < selectedPrices.listPrice : false
                         }
-                        
+
                         def featureSet = listFeatures.get(content)
                         if (!featureSet) {
-                            listFeatures.put(content, 
-                            [[productFeatureId:productFeature.productFeatureId, 
-                            productFeatureTypeEnumId:productFeature.productFeatureTypeEnumId, 
+                            listFeatures.put(content,
+                            [[productFeatureId:productFeature.productFeatureId,
+                            productFeatureTypeEnumId:productFeature.productFeatureTypeEnumId,
                             description:productFeature.description, abbrev:productFeature.abbrev, price:selectedPrices]])
                         } else {
                             boolean isItemInList = false
@@ -475,11 +475,11 @@ along with this software (see the LICENSE.md file). If not, see
                                 if(featureSet.get(i).productFeatureId.equals(productFeature.productFeatureId)) {
                                     isItemInList = true
                                     break
-                                } 
+                                }
                             }
                             if(!isItemInList) {
-                                featureSet.add([productFeatureId:productFeature.productFeatureId, 
-                                productFeatureTypeEnumId:productFeature.productFeatureTypeEnumId, 
+                                featureSet.add([productFeatureId:productFeature.productFeatureId,
+                                productFeatureTypeEnumId:productFeature.productFeatureTypeEnumId,
                                 description:productFeature.description, abbrev:productFeature.abbrev, price:selectedPrices])
                             }
                         }
@@ -553,7 +553,7 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="locale"/>
         </in-parameters>
         <out-parameters>
-            <auto-parameters entity-name="mantle.product.category.ProductCategory" include="nonpk"/>
+            <auto-parameters entity-name="mantle.product.category.ProductCategory"/>
             <parameter name="subCategoryList" type="List"><parameter name="categoryInfo" type="Map"/></parameter>
         </out-parameters>
         <actions>
@@ -570,12 +570,13 @@ along with this software (see the LICENSE.md file). If not, see
 
             <set field="subCategoryList" from="[]"/>
             <iterate list="rollupList" entry="rollup">
-                <entity-find-one entity-name="mantle.product.category.ProductCategory" value-field="productCategory" cache="true">
-                    <field-map field-name="productCategoryId" from="rollup.productCategoryId"/></entity-find-one>
+                <service-call name="popstore.ProductServices.get#CategoryInfo" in-map="[productCategoryId:rollup.productCategoryId]" out-map="subProductCategory"/>
+<!--                <log level="warn" message="${productCategoryId} -> ${rollup.productCategoryId} -> ${subProductCategory}"/>-->
+
                 <!-- TODO: ProductCategoryContent for smallImageInfo -->
-                <script>subCategoryList.add([productCategoryId:productCategory.productCategoryId, pseudoId:productCategory.pseudoId,
-                        categoryName:productCategory.categoryName, description:productCategory.description,
-                        smallImageInfo:smallImageInfo, sequenceNum:rollup.sequenceNum])</script>
+                <script>subCategoryList.add([productCategoryId:subProductCategory.productCategoryId, pseudoId:subProductCategory.pseudoId,
+                        categoryName:subProductCategory.categoryName, description:subProductCategory.description,
+                        smallImageInfo:smallImageInfo, sequenceNum:rollup.sequenceNum, subCategoryList:subProductCategory.subCategoryList])</script>
             </iterate>
         </actions>
     </service>

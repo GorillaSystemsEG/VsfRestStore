@@ -13,9 +13,58 @@ along with this software (see the LICENSE.md file). If not, see
 <http://creativecommons.org/publicdomain/zero/1.0/>.
 -->
 <services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+    <service verb="get" noun="ProductStoreId">
+        <description>
+            Get the ProductStoreId fast.
+
+            If the productStoreId has already been set for the web session, return that.
+            Otherwise use the requestHostName from the web session or the requestHostName parameter (required).
+            Search for the productStoreId from the requestHostName.
+            First search for a match ProductStore with a ProductStoreSetting with type PsstHostname.
+            Then, if not found, throw an error.
+        </description>
+        <in-parameters>
+            <parameter name="requestHostName"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="productStoreId"/>
+        </out-parameters>
+        <actions>
+            <set field="productStoreId" default-value="POPC_DEFAULT"/>
+            <return/>
+
+            <!-- TODO: Get multiple stores working and not hard coded -->
+            <set field="requestHostName" from="requestHostName ?: ec.web.sessionAttributes.requestHostName"/>
+
+            <if condition="ec.web.sessionAttributes.productStoreId">
+                <set field="productStoreId" from="ec.web.sessionAttributes.productStoreId"/>
+                <return type="success" message="productStoreId already set in sessionAttributes"/>
+            </if>
+
+            <if condition="!ec.web.sessionAttributes.requestHostName || ec.web.sessionAttributes.requestHostName != requestHostName">
+                <set field="ec.web.sessionAttributes.requestHostName" from="requestHostName"/>
+            </if>
+
+            <entity-find entity-name="mantle.product.store.ProductStoreSetting" list="hostSettingList">
+                <econdition field-name="settingTypeEnumId" value="PsstHostname"/>
+                <econdition field-name="settingValue" from="requestHostName"/>
+                <date-filter/>
+                <order-by field-name="-fromDate"/>
+            </entity-find>
+
+            <if condition="hostSettingList?.size() &gt; 1"><log level="error" message="Found more than one ProductStore with ProductStoreSetting with type PsstHostname found for hostname ${requestHostName}. Only one hostname is supported."/></if>
+
+            <set field="ec.web.sessionAttributes.productStoreId" from="hostSettingList?.getFirst()?.productStoreId"/>
+
+            <if condition="!ec.web.sessionAttributes.productStoreId"><log level="error" message="No ProductStore with ProductStoreSetting with type PsstHostname found for hostname ${requestHostName}"/></if>
+
+            <set field="productStoreId" from="ec.web.sessionAttributes.productStoreId"/>
+        </actions>
+    </service>
+
     <service verb="get" noun="LightBootstrap">
         <in-parameters>
-            <parameter name="menu_with_images"/>
+            <parameter name="requestHostName"/>
         </in-parameters>
         <out-parameters>
             <parameter name="success" type="Boolean"/>
@@ -23,40 +72,89 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="psdata" type="Map"/>
         </out-parameters>
         <actions>
-            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopLightBootstrap.json',false))"/>
-            <set field="code" from="data?.code"/>
-            <set field="success" from="data?.success"/>
-            <set field="psdata" from="data?.psdata"/>
+            <service-call name="popstore.PrestashopServices.get#ProductStoreId" in-map="[requestHostName:requestHostName]" out-map="context"/>
+
+            <service-call name="popstore.StoreServices.get#StoreInfo" in-map="[productStoreId:productStoreId]" out-map="storeInfo"/>
+            <set field="productStore" from="storeInfo.productStore"/>
+            <set field="wikiSpaceId" from="productStore?.wikiSpaceId"/>
+
+            <!-- lookup configured browse root category from storeInfo -->
+            <set field="browseRootCategory" from="storeInfo.categoryByType.PsctBrowseRoot"/>
+            <set field="browseRootCategoryId" from="browseRootCategory?.productCategoryId"/>
+            <!-- get browseRootCategoryInfo for subCategoryList used in header, etc -->
+            <if condition="browseRootCategoryId">
+                <service-call name="popstore.ProductServices.get#CategoryInfo" out-map="browseRootCategoryInfo"
+                              in-map="[productCategoryId:browseRootCategoryId]"/>
+            </if>
+
+            <!-- Start Prestashop Stuff -->
+            <set field="code" from="200"/>
+
+<!--            <log level="warn" message="browseRootCategoryInfo?.subCategoryList ${browseRootCategoryInfo?.subCategoryList}"/>-->
+
+            <set field="psdata" from="[ menuItems:[] ]"/>
+            <iterate list="browseRootCategoryInfo?.subCategoryList" entry="category">
+                <script>psdata.menuItems.add([
+                        id: category?.productCategoryId,
+                        slug: category?.productCategoryId,
+                        label: category?.categoryName
+                    ]);</script>
+            </iterate>
 
             <log level="warn" message="get#LightBootstrap"/>
+<!--            <log level="warn" message="LightBootstrap context ${browseRootCategory.toString()}"/>-->
         </actions>
     </service>
     <service verb="get" noun="FeaturedProducts">
-        <in-parameters>
-            <parameter name="with_all_images"/>
-        </in-parameters>
         <out-parameters>
             <parameter name="success" type="Boolean"/>
             <parameter name="code" type="Integer"/>
             <parameter name="psdata" type="Map"/>
         </out-parameters>
         <actions>
-            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopFeaturedProducts.json',false))"/>
-            <set field="code" from="data?.code"/>
-            <set field="success" from="data?.success"/>
-            <set field="psdata" from="data?.psdata"/>
+            <service-call name="popstore.PrestashopServices.get#ProductStoreId" in-map="[requestHostName:requestHostName]" out-map="context"/>
+
+            <!-- Best Selling (Featured) Category -->
+            <entity-find entity-name="mantle.product.store.ProductStoreCategory" list="featPscList" cache="true">
+                <date-filter/><econdition field-name="productStoreId"/>
+                <econdition field-name="storeCategoryTypeEnumId" value="PsctFeatured"/>
+            </entity-find>
+            <if condition="featPscList">
+                <service-call name="popstore.ProductServices.get#CategoryProducts" out-map="featCatProdOut"
+                              in-map="[productCategoryId:featPscList[0].productCategoryId]"/>
+                <set field="featureProductList" from="featCatProdOut.productList"/>
+            </if>
+
+            <!-- Start Prestashop Stuff -->
+<!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopFeaturedProducts.json',false))"/>-->
+            <set field="code" from="200"/>
+
+            <set field="psdata" from="[]"/>
+            <iterate list="featureProductList" entry="product">
+                <script>psdata.add([
+                        id_product: product?.productId,
+                        name: product?.productName,
+                        link_rewrite: product?.productId,
+                        regular_price_amount: product?.listPrice,
+                        price_amount: product?.price,
+                        cover: [url: "${ec.web.requestUrl.minus(ec.web.request.requestURI)}/store/content/productImage/${product?.mediumImageInfo?.productContentId ?: product?.smallImageInfo?.productContentId}"]
+                    ]);</script>
+            </iterate>
+
             <log level="warn" message="get#FeaturedProducts"/>
+<!--            <log level="warn" message="FeaturedProducts context ${context.toString()}"/>-->
         </actions>
     </service>
     <service verb="get" noun="CategoryProducts">
         <in-parameters>
             <parameter name="id_category"/>
+            <parameter name="slug"/>
+            <parameter name="q"/>
             <parameter name="page"/>
             <parameter name="with_all_images"/>
-            <parameter name="image_size"/>
-            <parameter name="slug"/>
-            <parameter name="resultsPerPage"/>
             <parameter name="with_category_tree"/>
+            <!--            <parameter name="image_size"/>-->
+            <!--            <parameter name="resultsPerPage"/>-->
         </in-parameters>
         <out-parameters>
             <parameter name="success" type="Boolean"/>
@@ -64,11 +162,62 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="psdata" type="Map"/>
         </out-parameters>
         <actions>
+            <service-call name="popstore.PrestashopServices.get#ProductStoreId" in-map="[requestHostName:requestHostName]" out-map="context"/>
+
+            <set field="categoryId" from="slug"/>
+            <service-call name="popstore.ProductServices.get#CategoryProducts" out-map="products"
+                          in-map="[productCategoryId:categoryId, orderBy: orderBy, pageIndex:pageIndex ? pageIndex : '0', pageSize:6]"/>
+
+            <service-call name="popstore.StoreServices.get#StoreInfo" in-map="[productStoreId:productStoreId]" out-map="storeInfo"/>
+            <set field="productStore" from="storeInfo.productStore"/>
+            <set field="wikiSpaceId" from="productStore?.wikiSpaceId"/>
+
+            <!-- lookup configured browse root category from storeInfo -->
+            <set field="browseRootCategory" from="storeInfo.categoryByType.PsctBrowseRoot"/>
+            <set field="browseRootCategoryId" from="browseRootCategory?.productCategoryId"/>
+            <!-- get browseRootCategoryInfo for subCategoryList used in header, etc -->
+            <if condition="browseRootCategoryId">
+                <service-call name="popstore.ProductServices.get#CategoryInfo" out-map="browseRootCategoryInfo"
+                              in-map="[productCategoryId:browseRootCategoryId]"/>
+            </if>
+
+            <!-- Start Prestashop Stuff -->
             <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopCategoryProducts.json',false))"/>
-            <set field="code" from="data?.code"/>
-            <set field="success" from="data?.success"/>
-            <set field="psdata" from="data?.psdata"/>
+            <set field="code" from="200"/>
+            <script>
+                def moquiToPrestashopCategory(category) {
+                    return [
+                        id: category?.productCategoryId,
+                        link: "https://moqui.org/en/0-${category?.productCategoryId}",
+                        name: category?.categoryName,
+                        desc: category?.categoryDescription,
+                        children: category?.subCategoryList?.collect { subCategory -> moquiToPrestashopCategory(subCategory) }
+                    ]
+                }
+            </script>
+            <set field="psdata" from="[ products:[], facets:[], categories:moquiToPrestashopCategory(browseRootCategoryInfo) ]"/>
+            <log level="warn" message="psdata ${psdata.toString()}"/>
+            <iterate list="products?.productList" entry="product">
+                <script>psdata.products.add([
+                    id_product: product?.productId,
+                    name: product?.productName,
+                    link_rewrite: product?.productId,
+                    regular_price_amount: product?.listPrice,
+                    price_amount: product?.price,
+                    cover: [url: "${ec.web.requestUrl.minus(ec.web.request.requestURI).substring(0, ec.web.requestUrl.minus(ec.web.request.requestURI).lastIndexOf('?'))}/store/content/productImage/${product?.mediumImageInfo?.productContentId ?: product?.smallImageInfo?.productContentId}"]
+                    ]);</script>
+            </iterate>
+<!--            <set field="psdata.products" from="data?.psdata?.products"/>-->
+            <set field="psdata.sort_orders" from="data?.psdata?.sort_orders"/>
+            <set field="psdata.sort_selected" from="data?.psdata?.sort_selected"/>
+            <set field="psdata.pagination" from="data?.psdata?.pagination"/>
+            <set field="psdata.sort_orders" from="data?.psdata?.sort_orders"/>
+            <set field="psdata.facets" from="data?.psdata?.facets"/>
+<!--            <set field="psdata.categories" from="data?.psdata?.categories"/>-->
+
+<!--            <set field="psdata" from="data?.psdata"/>-->
             <log level="warn" message="get#CategoryProducts"/>
+<!--            <log level="warn" message="get#CategoryProducts context ${context.toString()}"/>-->
         </actions>
     </service>
     <service verb="get" noun="ProductDetail">
