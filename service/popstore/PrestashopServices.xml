@@ -162,11 +162,14 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="psdata" type="Map"/>
         </out-parameters>
         <actions>
+<!--            <log level="warn" message="page ${page}"/>-->
+<!--            <log level="warn" message="q ${q.split('-|/').minus(q.split('/').collect{it.split('-')}.collect{it[0]})}"/>-->
+
             <service-call name="popstore.PrestashopServices.get#ProductStoreId" in-map="[requestHostName:requestHostName]" out-map="context"/>
 
             <set field="categoryId" from="slug"/>
             <service-call name="popstore.ProductServices.get#CategoryProducts" out-map="products"
-                          in-map="[productCategoryId:categoryId, orderBy: orderBy, pageIndex:pageIndex ? pageIndex : '0', pageSize:6]"/>
+                          in-map="[productCategoryId:categoryId, orderBy: orderBy, pageIndex:page?page-1: '0', pageSize:12]"/>
 
             <service-call name="popstore.StoreServices.get#StoreInfo" in-map="[productStoreId:productStoreId]" out-map="storeInfo"/>
             <set field="productStore" from="storeInfo.productStore"/>
@@ -179,6 +182,34 @@ along with this software (see the LICENSE.md file). If not, see
             <if condition="browseRootCategoryId">
                 <service-call name="popstore.ProductServices.get#CategoryInfo" out-map="browseRootCategoryInfo"
                               in-map="[productCategoryId:browseRootCategoryId]"/>
+            </if>
+
+            <!-- Get ProductFeatures for the Products in the ProductCategory Specified -->
+            <if condition="!q">
+                <then>
+                    <set field="productsFiltered" from="products?.productList"/>
+                    <entity-find entity-name="mantle.product.feature.ProductFeatureAndAppl" list="pfaaList">
+                        <date-filter/>
+                        <econdition field-name="productId" operator="in" from="products?.productList?.productId"/>
+                        <order-by field-name="typeDescription,sequenceNum,description"/>
+                    </entity-find>
+                </then>
+                <else>
+                    <set field="descriptionList" from="q.split('-|/').minus(q.split('/').collect{it.split('-')}.collect{it[0]})"/>
+                    <log level="warn" message="descriptionList ${descriptionList}"/>
+                    <entity-find entity-name="mantle.product.feature.ProductFeatureAndAppl" list="pfaaList">
+                        <date-filter/>
+                        <econdition field-name="productId" operator="in" from="products?.productList?.productId"/>
+                        <order-by field-name="typeDescription,sequenceNum,description"/>
+                    </entity-find>
+                    <log level="warn" message="pfaaList ${pfaaList}"/>
+                    <set field="productsFiltered" from="[]"/>
+                    <iterate list="products?.productList" entry="product">
+                        <if condition="pfaaList?.productId?.contains(product.productId)">
+                            <script>productsFiltered.add(product)</script>
+                        </if>
+                    </iterate>
+                </else>
             </if>
 
             <!-- Start Prestashop Stuff -->
@@ -195,9 +226,8 @@ along with this software (see the LICENSE.md file). If not, see
                     ]
                 }
             </script>
-            <set field="psdata" from="[ products:[], facets:[], categories:moquiToPrestashopCategory(browseRootCategoryInfo) ]"/>
-            <log level="warn" message="psdata ${psdata.toString()}"/>
-            <iterate list="products?.productList" entry="product">
+            <set field="psdata" from="[ products:[], pagination:[current_page: products?.productListPageIndex+1,total_items: products?.productListCount,pages_count: products?.productListPageMaxIndex+1], facets:[], categories:moquiToPrestashopCategory(browseRootCategoryInfo) ]"/>
+            <iterate list="productsFiltered" entry="product">
                 <script>psdata.products.add([
                     id_product: product?.productId,
                     name: product?.productName,
@@ -207,15 +237,30 @@ along with this software (see the LICENSE.md file). If not, see
                     cover: [url: "${ec.web.requestUrl.minus(ec.web.request.requestURI).substring(0, ec.web.requestUrl.minus(ec.web.request.requestURI).lastIndexOf('?'))}/store/content/productImage/${product?.mediumImageInfo?.productContentId ?: product?.smallImageInfo?.productContentId}"]
                     ]);</script>
             </iterate>
-<!--            <set field="psdata.products" from="data?.psdata?.products"/>-->
-            <set field="psdata.sort_orders" from="data?.psdata?.sort_orders"/>
-            <set field="psdata.sort_selected" from="data?.psdata?.sort_selected"/>
-            <set field="psdata.pagination" from="data?.psdata?.pagination"/>
-            <set field="psdata.sort_orders" from="data?.psdata?.sort_orders"/>
-            <set field="psdata.facets" from="data?.psdata?.facets"/>
-<!--            <set field="psdata.categories" from="data?.psdata?.categories"/>-->
+            <iterate list="pfaaList" entry="productFeatureAndAppl">
+                <if condition="!psdata?.facets?.find{it.id == productFeatureAndAppl.productFeatureTypeEnumId}">
+                    <script>psdata.facets.add([
+                        id: productFeatureAndAppl?.productFeatureTypeEnumId,
+                        displayed: true,
+                        label: productFeatureAndAppl?.typeDescription,
+                        filters: [],
+                        multipleSelectionAllowed: true,
+                        widgetType: "checkbox"
+                        ]);</script>
+                </if>
+                <if condition="!psdata?.facets?.find{it.id == productFeatureAndAppl.productFeatureTypeEnumId}.filters.find{it.id == productFeatureAndAppl?.productFeatureId}">
+                    <script>psdata?.facets?.find{it.id == productFeatureAndAppl.productFeatureTypeEnumId}.filters.add([
+                        id: productFeatureAndAppl?.productFeatureId,
+                        label: productFeatureAndAppl?.description,
+                        type: "attribute_group",
+                        active: false,
+                        magnitude: pfaaList?.productFeatureId?.findAll{it == productFeatureAndAppl?.productFeatureId}.size()
+                        ]);</script>
+                </if>
+            </iterate>
+<!--            <set field="psdata.sort_orders" from="data?.psdata?.sort_orders"/>-->
+<!--            <set field="psdata.sort_selected" from="data?.psdata?.sort_selected"/>-->
 
-<!--            <set field="psdata" from="data?.psdata"/>-->
             <log level="warn" message="get#CategoryProducts"/>
 <!--            <log level="warn" message="get#CategoryProducts context ${context.toString()}"/>-->
         </actions>
@@ -236,10 +281,85 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="psdata" type="Map"/>
         </out-parameters>
         <actions>
-            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopProductDetail.json',false))"/>
-            <set field="code" from="data?.code"/>
-            <set field="success" from="data?.success"/>
-            <set field="psdata" from="data?.psdata"/>
+            <log level="warn" message="product_id ${product_id}"/>
+            <log level="warn" message="refresh ${refresh}"/>
+            <log level="warn" message="group ${ec.web.getRequestParameters()}"/>
+
+            <iterate list="group" entry="member">
+                <log level="warn" message="member ${member}"/>
+            </iterate>
+
+            <service-call name="popstore.PrestashopServices.get#ProductStoreId" in-map="[requestHostName:requestHostName]" out-map="context"/>
+
+            <set field="productId" from="product_id"/>
+            <service-call name="popstore.ProductServices.get#ProductInfo" out-map="product" in-map="[productId:productId]"/>
+            <service-call name="popstore.ProductServices.get#ProductQuantity" out-map="productQuantity" in-map="[productId:productId]"/>
+            <service-call name="popstore.ProductServices.get#ProductReviews" out-map="reviewsList" in-map="[productId:productId]"/>
+            <service-call name="popstore.ProductServices.find#ProductAvailability" in-map="context" out-map="context" />
+
+<!--            <log level="warn" message="product ${product.toString()}"/>-->
+
+            <entity-find entity-name="mantle.product.feature.ProductFeatureAndAppl" list="pfaaList">
+                <date-filter/>
+                <econdition field-name="productId" from="product?.productId"/>
+                <order-by field-name="typeDescription,sequenceNum,description"/>
+            </entity-find>
+
+            <!-- Start Prestashop Stuff -->
+<!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopProductDetail.json',false))"/>-->
+
+            <set field="code" from="200"/>
+            <set field="imageUrl" value="${ec.web.requestUrl.minus(ec.web.request.requestURI).substring(0, ec.web.requestUrl.minus(ec.web.request.requestURI).lastIndexOf('?'))}/store/content/productImage/${product?.contentList?.getFirst()?.productContentId}"/>
+            <set field="psdata" from="[
+                id_product: product?.productId,
+                name: product?.productName,
+                float_price: product?.price,
+                images: [],
+                cover_image: imageUrl,
+                description: product?.descriptionLong,
+                description_short: product?.descriptionSmall ?: product?.description ?: product?.descriptionLong,
+                product_info: [],
+                manufacturer_name: 'Brand Manufacture Name',
+                category_name: 'Category Name',
+                groups: pfaaList?.productFeatureTypeEnumId?.groupBy{it}
+                ]"/>
+            <set field="psdata.images" from="[]"/>
+            <iterate list="product?.contentList" entry="content">
+                <if condition="content?.productContentId &amp;&amp; content?.productContentTypeEnumId?.contains('Image')">
+                    <script>psdata.images.add(src: "${ec.web.requestUrl.minus(ec.web.request.requestURI).substring(0, ec.web.requestUrl.minus(ec.web.request.requestURI).lastIndexOf('?'))}/store/content/productImage/${content?.productContentId}")</script>
+                </if>
+            </iterate>
+<!--            <iterate list="psdata.groups" entry="group">-->
+<!--                <set field="psdata.groups[group.key]" from="[-->
+<!--                    name: pfaaList?.find{it.productFeatureTypeEnumId == group.key}?.typeDescription,-->
+<!--                    group_type: 'select',-->
+<!--                    attributes: []-->
+<!--                    ]"/>-->
+
+<!--                <iterate list="pfaaList?.findAll{it.productFeatureTypeEnumId == group.key}" entry="productFeatureAndAppl">-->
+<!--                    <script>psdata.groups[group.key].attributes.add("${productFeatureAndAppl.productFeatureId}": [-->
+<!--                        name: productFeatureAndAppl?.description,-->
+<!--                        selected: false-->
+<!--                        ])</script>-->
+<!--                </iterate>-->
+<!--            </iterate>-->
+
+            <iterate list="psdata.groups" entry="group">
+                <set field="psdata.groups[group.key]" from="[
+                    name: pfaaList?.find{it.productFeatureTypeEnumId == group.key}?.typeDescription,
+                    group_type: 'select',
+                    attributes: pfaaList?.findAll{it.productFeatureTypeEnumId == group.key}?.productFeatureId?.groupBy{it}
+                    ]"/>
+                <iterate list="psdata.groups[group.key].attributes" entry="attribute">
+                    <set field="psdata.groups[group.key].attributes[attribute.key]" from="[
+                        name: pfaaList?.find{it.productFeatureId == attribute.key}?.description,
+                        selected: false
+                        ]"/>
+                </iterate>
+            </iterate>
+            <log level="warn" message="psdata ${psdata}"/>
+
+<!--            <set field="psdata" from="data?.psdata"/>-->
             <log level="warn" message="get#ProductDetail"/>
         </actions>
     </service>
