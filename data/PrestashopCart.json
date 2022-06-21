@@ -1,1 +1,186 @@
-{"code":200,"success":true,"message":"cart operation successfully done","psdata":{"products":[],"totals":{"total":{"type":"total","label":"Total","amount":0,"value":"$0.00"},"total_including_tax":{"type":"total","label":"Total (tax incl.)","amount":0,"value":"$0.00"},"total_excluding_tax":{"type":"total","label":"Total (tax excl.)","amount":0,"value":"$0.00"}},"subtotals":{"products":{"type":"products","label":"Subtotal","amount":0,"value":"$0.00"},"discounts":null,"shipping":{"type":"shipping","label":"Shipping","amount":0,"value":""},"tax":{"type":"tax","label":"Taxes","amount":0,"value":"$0.00"}},"products_count":0,"summary_string":"0 items","labels":{"tax_short":"(tax excl.)","tax_long":"(tax excluded)"},"id_address_delivery":"261","id_address_invoice":"261","is_virtual":false,"vouchers":{"allowed":1,"added":[]},"discounts":[],"minimalPurchase":0,"minimalPurchaseRequired":""},"errors":[]}
+{
+  "code": 200,
+  "success": true,
+  "message": "cart operation successfully done",
+  "psdata": {
+    "products": [
+      {
+        "id_product_attribute": "11",
+        "id_product": "2",
+        "cart_quantity": "9",
+        "id_shop": "1",
+        "id_customization": null,
+        "name": "Hummingbird printed sweater",
+        "is_virtual": "0",
+        "description_short": "<p><span style=\"font-size:10pt;font-style:normal;\">Regular fit, round neckline, long sleeves. 100% cotton, brushed inner side for extra comfort. <\/span><\/p>",
+        "available_now": "",
+        "available_later": "",
+        "id_category_default": "5",
+        "id_supplier": "0",
+        "id_manufacturer": "1",
+        "manufacturer_name": "Studio Design",
+        "on_sale": "0",
+        "ecotax": "0.000000",
+        "additional_shipping_cost": "0.000000",
+        "available_for_order": "1",
+        "show_price": "1",
+        "price": 28.719999999999999,
+        "active": "1",
+        "unity": "",
+        "unit_price_ratio": "0.000000",
+        "quantity_available": "256",
+        "width": "0.000000",
+        "height": "0.000000",
+        "depth": "0.000000",
+        "out_of_stock": "2",
+        "weight": 0.29999999999999999,
+        "available_date": "0000-00-00",
+        "date_add": "2021-07-22 01:32:37",
+        "date_upd": "2021-07-22 01:32:37",
+        "quantity": 9,
+        "link_rewrite": "brown-bear-printed-sweater",
+        "category": "women",
+        "unique_id": "000000000200000000112610",
+        "id_address_delivery": "261",
+        "advanced_stock_management": "0",
+        "supplier_reference": null,
+        "customization_quantity": null,
+        "price_attribute": "0.000000",
+        "ecotax_attr": "0.000000",
+        "reference": "demo_3",
+        "weight_attribute": 0.29999999999999999,
+        "ean13": "",
+        "isbn": "",
+        "upc": "",
+        "mpn": "",
+        "minimal_quantity": "1",
+        "wholesale_price": "0.000000",
+        "id_image": "2-21",
+        "legend": "Brown bear printed sweater",
+        "reduction_type": "percentage",
+        "is_gift": false,
+        "reduction": 7.1799999999999997,
+        "reduction_without_tax": 7.1799999999999997,
+        "price_without_reduction": 35.899999999999999,
+        "specific_prices": {
+          "id_specific_price": "2",
+          "id_specific_price_rule": "0",
+          "id_cart": "0",
+          "id_product": "2",
+          "id_shop": "0",
+          "id_shop_group": "0",
+          "id_currency": "0",
+          "id_country": "0",
+          "id_group": "0",
+          "id_customer": "0",
+          "id_product_attribute": "0",
+          "price": "-1.000000",
+          "from_quantity": "1",
+          "reduction": "0.200000",
+          "reduction_tax": "1",
+          "reduction_type": "percentage",
+          "from": "0000-00-00 00:00:00",
+          "to": "0000-00-00 00:00:00",
+          "score": "0"
+        },
+        "stock_quantity": 256,
+        "price_without_reduction_without_tax": 35.899999999999999,
+        "price_with_reduction": 28.719999999999999,
+        "price_with_reduction_without_tax": 28.719999999999999,
+        "total": 258.48000000000002,
+        "total_wt": 258.48000000000002,
+        "price_wt": 28.719999999999999,
+        "reduction_applies": true,
+        "quantity_discount_applies": true,
+        "allow_oosp": 0,
+        "features": [
+          {
+            "id_feature": "1",
+            "id_product": "2",
+            "id_feature_value": "4"
+          },
+          {
+            "id_feature": "2",
+            "id_product": "2",
+            "id_feature_value": "7"
+          }
+        ],
+        "attributes": "Size : L",
+        "attributes_small": "L",
+        "rate": 0,
+        "tax_name": "",
+        "image_url": "https:\/\/rest.binshops.com\/21-medium_default\/brown-bear-printed-sweater.jpg",
+        "formatted_price": "$28.72",
+        "formatted_total": "$258.48",
+        "formatted_price_amount": "$28.72",
+        "formatted_price_tax_exc": "$28.72",
+        "formatted_regular_price": "$35.90",
+        "formatted_discount_to_display": "$7.18",
+        "formatted_discount_amount_to_display": "-$7.18",
+        "formatted_discount_type": "percentage",
+        "formatted_discount_percentage": "-20%",
+        "attributes_array": {
+          "Size": "L"
+        }
+      }
+    ],
+    "totals": {
+      "total": {
+        "type": "total",
+        "label": "Total",
+        "amount": 265.48000000000002,
+        "value": "$265.48"
+      },
+      "total_including_tax": {
+        "type": "total",
+        "label": "Total (tax incl.)",
+        "amount": 265.48000000000002,
+        "value": "$265.48"
+      },
+      "total_excluding_tax": {
+        "type": "total",
+        "label": "Total (tax excl.)",
+        "amount": 265.48000000000002,
+        "value": "$265.48"
+      }
+    },
+    "subtotals": {
+      "products": {
+        "type": "products",
+        "label": "Subtotal",
+        "amount": 258.48000000000002,
+        "value": "$258.48"
+      },
+      "discounts": null,
+      "shipping": {
+        "type": "shipping",
+        "label": "Shipping",
+        "amount": 7,
+        "value": "$7.00"
+      },
+      "tax": {
+        "type": "tax",
+        "label": "Taxes",
+        "amount": 0,
+        "value": "$0.00"
+      }
+    },
+    "products_count": 9,
+    "summary_string": "9 items",
+    "labels": {
+      "tax_short": "(tax excl.)",
+      "tax_long": "(tax excluded)"
+    },
+    "id_address_delivery": "261",
+    "id_address_invoice": "261",
+    "is_virtual": false,
+    "vouchers": {
+      "allowed": 1,
+      "added": []
+    },
+    "discounts": [],
+    "minimalPurchase": 0,
+    "minimalPurchaseRequired": ""
+  },
+  "errors": []
+}

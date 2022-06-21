@@ -196,13 +196,13 @@ along with this software (see the LICENSE.md file). If not, see
                 </then>
                 <else>
                     <set field="descriptionList" from="q.split('-|/').minus(q.split('/').collect{it.split('-')}.collect{it[0]})"/>
-                    <log level="warn" message="descriptionList ${descriptionList}"/>
+<!--                    <log level="warn" message="descriptionList ${descriptionList}"/>-->
                     <entity-find entity-name="mantle.product.feature.ProductFeatureAndAppl" list="pfaaList">
                         <date-filter/>
                         <econdition field-name="productId" operator="in" from="products?.productList?.productId"/>
                         <order-by field-name="typeDescription,sequenceNum,description"/>
                     </entity-find>
-                    <log level="warn" message="pfaaList ${pfaaList}"/>
+<!--                    <log level="warn" message="pfaaList ${pfaaList}"/>-->
                     <set field="productsFiltered" from="[]"/>
                     <iterate list="products?.productList" entry="product">
                         <if condition="pfaaList?.productId?.contains(product.productId)">
@@ -281,21 +281,18 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="psdata" type="Map"/>
         </out-parameters>
         <actions>
-            <log level="warn" message="product_id ${product_id}"/>
-            <log level="warn" message="refresh ${refresh}"/>
-            <log level="warn" message="group ${ec.web.getRequestParameters()}"/>
+<!--            <log level="warn" message="product_id ${product_id}"/>-->
+<!--            <log level="warn" message="refresh ${refresh}"/>-->
+<!--            <log level="warn" message="group ${ec.web.getRequestParameters()}"/>-->
 
-            <iterate list="group" entry="member">
-                <log level="warn" message="member ${member}"/>
-            </iterate>
+<!--            <iterate list="group" entry="member">-->
+<!--                <log level="warn" message="member ${member}"/>-->
+<!--            </iterate>-->
 
             <service-call name="popstore.PrestashopServices.get#ProductStoreId" in-map="[requestHostName:requestHostName]" out-map="context"/>
 
             <set field="productId" from="product_id"/>
             <service-call name="popstore.ProductServices.get#ProductInfo" out-map="product" in-map="[productId:productId]"/>
-            <service-call name="popstore.ProductServices.get#ProductQuantity" out-map="productQuantity" in-map="[productId:productId]"/>
-            <service-call name="popstore.ProductServices.get#ProductReviews" out-map="reviewsList" in-map="[productId:productId]"/>
-            <service-call name="popstore.ProductServices.find#ProductAvailability" in-map="context" out-map="context" />
 
 <!--            <log level="warn" message="product ${product.toString()}"/>-->
 
@@ -329,21 +326,6 @@ along with this software (see the LICENSE.md file). If not, see
                     <script>psdata.images.add(src: "${ec.web.requestUrl.minus(ec.web.request.requestURI).substring(0, ec.web.requestUrl.minus(ec.web.request.requestURI).lastIndexOf('?'))}/store/content/productImage/${content?.productContentId}")</script>
                 </if>
             </iterate>
-<!--            <iterate list="psdata.groups" entry="group">-->
-<!--                <set field="psdata.groups[group.key]" from="[-->
-<!--                    name: pfaaList?.find{it.productFeatureTypeEnumId == group.key}?.typeDescription,-->
-<!--                    group_type: 'select',-->
-<!--                    attributes: []-->
-<!--                    ]"/>-->
-
-<!--                <iterate list="pfaaList?.findAll{it.productFeatureTypeEnumId == group.key}" entry="productFeatureAndAppl">-->
-<!--                    <script>psdata.groups[group.key].attributes.add("${productFeatureAndAppl.productFeatureId}": [-->
-<!--                        name: productFeatureAndAppl?.description,-->
-<!--                        selected: false-->
-<!--                        ])</script>-->
-<!--                </iterate>-->
-<!--            </iterate>-->
-
             <iterate list="psdata.groups" entry="group">
                 <set field="psdata.groups[group.key]" from="[
                     name: pfaaList?.find{it.productFeatureTypeEnumId == group.key}?.typeDescription,
@@ -357,7 +339,7 @@ along with this software (see the LICENSE.md file). If not, see
                         ]"/>
                 </iterate>
             </iterate>
-            <log level="warn" message="psdata ${psdata}"/>
+<!--            <log level="warn" message="psdata ${psdata}"/>-->
 
 <!--            <set field="psdata" from="data?.psdata"/>-->
             <log level="warn" message="get#ProductDetail"/>
@@ -375,11 +357,41 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="psdata" type="Map"/>
         </out-parameters>
         <actions>
-            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopListComments.json',false))"/>
-            <set field="code" from="data?.code"/>
-            <set field="success" from="data?.success"/>
-            <set field="psdata" from="data?.psdata"/>
+<!--            <log level="warn" message="id_product ${id_product}"/>-->
+<!--            <log level="warn" message="page ${page}"/>-->
+
+            <service-call name="popstore.PrestashopServices.get#ProductStoreId" in-map="[requestHostName:requestHostName]" out-map="context"/>
+
+            <set field="productId" from="id_product"/>
+            <service-call name="popstore.ProductServices.get#ProductReviews" out-map="reviewsList" in-map="[productId:productId]"/>
+
+<!--            <log level="warn" message="reviewsList ${reviewsList.toString()}"/>-->
+
+            <!-- Start Prestashop Stuff -->
+<!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopListComments.json',false))"/>-->
+            <set field="code" from="200"/>
+            <set field="psdata" from="[ comments_nb:reviewsList?.productReviewList?.size(), comments_per_page: '5', comments:[]]"/>
+            <iterate list="reviewsList?.productReviewList" entry="review">
+                <if condition="review?.userId">
+                    <entity-find-one entity-name="mantle.party.PersonAndUserAccount" value-field="personUserAccount">
+                        <field-map field-name="userId" from="review.userId"/>
+                    </entity-find-one>
+                </if>
+                <script>psdata.comments.add([
+                    id_product_comment: review?.productReviewId,
+                    firstname: personUserAccount?.firstName ?: 'Anonymous',
+                    lastname: personUserAccount?.lastName ?: '',
+                    date_add: ec.l10n.format(review?.postedDateTime,'MM/dd/yy hh:mm a'),
+                    content: review?.productReview,
+                    grade: review?.productRating
+                    ])</script>
+<!--                <log level="warn" message="psdata ${ec.l10n.format(review?.postedDateTime,'MM/dd/yy HH:mm a')?.getClass()}"/>-->
+            </iterate>
+<!--            <log level="warn" message="psdata last ${psdata.toString()}"/>-->
+
+<!--            <set field="psdata" from="data?.psdata"/>-->
             <log level="warn" message="list#Comments"/>
+<!--            <log level="warn" message="context ${context.toString()}"/>-->
         </actions>
     </service>
     <service verb="get" noun="ProductSearch">
@@ -394,11 +406,34 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="psdata" type="Map"/>
         </out-parameters>
         <actions>
+            <service-call name="popstore.PrestashopServices.get#ProductStoreId" in-map="[requestHostName:requestHostName]" out-map="context"/>
+
+            <set field="searchParameter" from="s"/>
+            <service-call name="popstore.SearchServices.search#All" out-map="context"
+                          in-map="[searchParameter:searchParameter, productStoreId:productStoreId, pageIndex:pageIndex ? pageIndex : '0', pageSize:resultsPerPage?:'12']"/>
+
+            <!-- Start Prestashop Stuff -->
             <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopProductSearch.json',false))"/>
+            <set field="code" from="200"/>
+            <set field="psdata" from="[ products:[] ]"/>
+            <iterate list="productSearchResults?.productList" entry="product">
+                <script>psdata.products.add([
+                    id_product: product?.productId,
+                    name: product?.productName,
+                    link_rewrite: product?.productId,
+                    regular_price_amount: product?.listPrice,
+                    price_amount: product?.price,
+                    cover: [url: "${ec.web.requestUrl.minus(ec.web.request.requestURI).substring(0, ec.web.requestUrl.minus(ec.web.request.requestURI).lastIndexOf('?'))}/store/content/productImage/${product?.mediumImageInfo?.productContentId ?: product?.smallImageInfo?.productContentId}"]
+                    ]);</script>
+<!--                <log level="warn" message="product ${product?.toString()}"/>-->
+            </iterate>
+
+<!--            <log level="warn" message="psdata ${psdata.toString()}"/>-->
+
+<!--            <set field="psdata" from="data?.psdata"/>-->
             <set field="code" from="data?.code"/>
-            <set field="success" from="data?.success"/>
-            <set field="psdata" from="data?.psdata"/>
             <log level="warn" message="get#ProductSearch"/>
+<!--            <log level="warn" message="context ${context.toString()}"/>-->
         </actions>
     </service>
     <service verb="get" noun="AddressForm">
@@ -413,17 +448,47 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="psdata" type="Map"/>
         </out-parameters>
         <actions>
+            <service-call name="popstore.PrestashopServices.get#ProductStoreId" in-map="[requestHostName:requestHostName]" out-map="context"/>
+
+
+            <!-- Start Prestashop Stuff -->
             <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopAddressForm.json',false))"/>
-            <set field="code" from="data?.code"/>
-            <set field="success" from="data?.success"/>
+<!--            <set field="code" from="200"/>-->
+<!--            <set field="psdata" from="[ products:[] ]"/>-->
+<!--            <iterate list="productSearchResults?.productList" entry="product">-->
+<!--                <script>psdata.products.add([-->
+<!--                    id_product: product?.productId,-->
+<!--                    name: product?.productName,-->
+<!--                    link_rewrite: product?.productId,-->
+<!--                    regular_price_amount: product?.listPrice,-->
+<!--                    price_amount: product?.price,-->
+<!--                    cover: [url: "${ec.web.requestUrl.minus(ec.web.request.requestURI).substring(0, ec.web.requestUrl.minus(ec.web.request.requestURI).lastIndexOf('?'))}/store/content/productImage/${product?.mediumImageInfo?.productContentId ?: product?.smallImageInfo?.productContentId}"]-->
+<!--                    ]);</script>-->
+<!--                &lt;!&ndash;                <log level="warn" message="product ${product?.toString()}"/>&ndash;&gt;-->
+<!--            </iterate>-->
+
+            <!--            <log level="warn" message="psdata ${psdata.toString()}"/>-->
+
             <set field="psdata" from="data?.psdata"/>
+            <set field="code" from="data?.code"/>
+            <log level="warn" message="get#ProductSearch"/>
+            <!--            <log level="warn" message="context ${context.toString()}"/>-->
+
+<!--            <set field="psdata" from="data?.psdata"/>-->
             <log level="warn" message="get#AddressForm"/>
         </actions>
     </service>
 
     <service verb="get" noun="Cart">
         <in-parameters>
-            <parameter name="image_size" default-value="medium_default"/>
+            <parameter name="update"/>
+            <parameter name="id_product"/>
+            <parameter name="id_product_attribute"/>
+            <parameter name="delete"/>
+            <parameter name="op"/>
+            <parameter name="action"/>
+            <parameter name="image_size"/>
+            <parameter name="qty"/>
         </in-parameters>
         <out-parameters>
             <parameter name="success" type="Boolean"/>
@@ -431,11 +496,46 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="psdata" type="Map"/>
         </out-parameters>
         <actions>
-            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopCart.json',false))"/>
-            <set field="code" from="data?.code"/>
-            <set field="success" from="data?.success"/>
-            <set field="psdata" from="data?.psdata"/>
+            <log level="warn" message="id_product ${id_product}"/>
+            <log level="warn" message="id_product_attribute ${id_product_attribute}"/>
+            <log level="warn" message="qty ${qty}"/>
+
+            <service-call name="popstore.PrestashopServices.get#ProductStoreId" in-map="[requestHostName:requestHostName]" out-map="context"/>
+
+            <set field="productId" from="id_product"/>
+            <set field="quantity" from="qty"/>
+            <service-call name="popstore.CartServices.add#Product" out-map="addOut"
+                          in-map="[productId:productId, quantity:quantity, currencyUomId:currencyUomId, productStoreId: productStoreId]"/>
+            <set field="addedCorrect" from="addOut?.orderHeader != null"/>
+
+
+
+            <!-- Start Prestashop Stuff -->
+            <!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopCart.json',false))"/>-->
+            <set field="code" from="200"/>
+            <set field="psdata" from="[ products:[] ]"/>
+            <iterate list="addOut?.orderItemList" entry="orderItem">
+
+<!--                <script>psdata.products.add([-->
+<!--                    id_product: ,-->
+<!--                    id_product_attribute: ,-->
+<!--                    attributes_array: [],-->
+<!--                    name: ,-->
+<!--                    image_url: ,-->
+<!--                    price_without_reduction: ,-->
+<!--                    price: ,-->
+<!--                    cart_quantity: product?.listPrice,-->
+<!--                    reference: product?.price-->
+<!--                    ]);</script>-->
+                <log level="warn" message="orderItem ${orderItem?.productId?.toString()}"/>
+            </iterate>
+
+            <!--            <log level="warn" message="psdata ${psdata.toString()}"/>-->
+
+
+            <!--            <set field="psdata" from="data?.psdata"/>-->
             <log level="warn" message="get#Cart"/>
+            <log level="warn" message="context ${context.toString()}"/>
         </actions>
     </service>
     <service verb="get" noun="AccountInfo">

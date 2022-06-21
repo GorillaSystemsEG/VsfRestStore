@@ -39,16 +39,16 @@ along with this software (see the LICENSE.md file). If not, see
     <resource name="productSearch" require-authentication="anonymous-view">
         <method type="get"><service name="popstore.PrestashopServices.get#ProductSearch"/></method>
     </resource>
-    <resource name="addressform" require-authentication="anonymous-view">
-        <method type="get"><service name="popstore.PrestashopServices.get#AddressForm"/></method>
-    </resource>
 
     <!-- Cart, Account, and Authentication -->
     <resource name="cart" require-authentication="anonymous-view">
         <method type="get"><service name="popstore.PrestashopServices.get#Cart"/></method>
     </resource>
-    <resource name="accountInfo" require-authentication="anonymous-view">
+    <resource name="accountInfo">
         <method type="get"><service name="popstore.PrestashopServices.get#AccountInfo"/></method>
+    </resource>
+    <resource name="addressform" require-authentication="anonymous-view">
+        <method type="get"><service name="popstore.PrestashopServices.get#AddressForm"/></method>
     </resource>
     <resource name="accountedit" require-authentication="anonymous-view">
         <method type="post"><service name="popstore.PrestashopServices.post#AccountEdit"/></method>
