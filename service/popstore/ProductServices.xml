@@ -123,15 +123,17 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="productQuantity"/>
         </out-parameters>
         <actions>
+            <log level="warn" message="productId ${productId}"/>
             <entity-find-one entity-name="mantle.product.asset.AssetAndDetail" value-field="asset">
                 <field-map field-name="productId" from="productId"/>
-                <field-map field-name="statusId" from="'AstAvailable'"/>
-                <field-map field-name="assetTypeEnumId" from="'AstTpInventory'"/>
+                <field-map field-name="statusId" value="AstAvailable"/>
+                <field-map field-name="assetTypeEnumId" value="AstTpInventory"/>
             </entity-find-one>
             <if condition="!asset">
                 <return message="Asset not found"/>
             </if>
-            <set field="productQuantity" from="asset.quantityOnHandTotal ? asset.quantityOnHandTotal : 0"/>
+            <set field="productQuantity" from="asset.quantityOnHandTotal ?: 0"/>
+
         </actions>
     </service>
 

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-This software is in the public domain under CC0 1.0 Universal plus a 
+This software is in the public domain under CC0 1.0 Universal plus a
 Grant of Patent License.
 
 To the extent possible under law, the author(s) have dedicated all
@@ -215,9 +215,51 @@ General Order Placement and eCommerce Usage
 
             <service-call name="popstore.CartServices.get#ActiveOrderAndCustomer" out-map="context"/>
             <set field="orderId" from="cartOrderId"/>
-            <set field="defaultOrderParameters" from="[salesChannelEnumId:'ScWeb']" />
-            <service-call name="mantle.order.OrderServices.add#OrderProductQuantity" in-map="context + defaultOrderParameters" out-map="addOut"/>
+            <service-call name="mantle.order.OrderServices.add#OrderProductQuantity" in-map="context + [salesChannelEnumId:'ScWeb']" out-map="addOut"/>
             <set field="sessionAttributes.cartOrderId" from="addOut.orderId"/>
+
+            <service-call name="popstore.CartServices.get#CartInfo" out-map="context"/>
+        </actions>
+    </service>
+
+    <service verb="remove" noun="Product" authenticate="anonymous-all">
+        <implements service="popstore.CartServices.get#CartInfo"/>
+        <in-parameters>
+            <parameter name="productId" required="true"/>
+            <parameter name="quantity" type="BigDecimal" default="1.0"/>
+            <parameter name="addToQuantity" type="Boolean" default="true">
+                <description>If true add to existing quantity, if false set quantity on current item</description></parameter>
+            <parameter name="currencyUomId"/>
+            <parameter name="productStoreId"/>
+        </in-parameters>
+        <actions>
+
+            <!-- NOTE: use the web session for attributes such as cartOrderId for security; this won't work in a stateless mode or outside a web session -->
+            <set field="carrierPartyId" from="'_NA_'"/>
+            <set field="shipmentMethodEnumId" from="'ShMthGround'"/>
+            <set field="sessionAttributes" from="ec.web.sessionAttributes"/>
+
+            <service-call name="popstore.CartServices.get#ActiveOrderAndCustomer" out-map="context"/>
+            <set field="orderId" from="cartOrderId"/>
+            <entity-find entity-name="mantle.order.OrderItem" list="orderItemList">
+                <econdition field-name="orderId"/>
+                <econdition field-name="productId"/>
+                <econdition field-name="itemTypeEnumId" value="ItemProduct"/>
+                <econdition field-name="fromAssetId" operator="is-null"/>
+                <econdition field-name="selectedAmount" operator="is-null"/>
+                <!-- for future reference: <econdition field-name="productConfigSavedId" operator="is-null"/> -->
+                <order-by field-name="orderItemSeqId"/>
+            </entity-find>
+<!--            <log level="warn" message="orderItemList ${orderItemList}"/>-->
+
+            <if condition="orderItemList"><then>
+                <set field="orderItem" from="orderItemList.first"/>
+                <if condition="addToQuantity"><then>
+                    <set field="quantity" from="quantity &gt; 0 ? orderItem.quantity-quantity : orderItem.quantity+quantity"/>
+                </then></if>
+<!--                <log level="warn" message="quantity ${quantity}"/>-->
+                <service-call name="mantle.order.OrderServices.update#OrderItem" in-map="[orderId:orderId,orderItemSeqId:orderItem.orderItemSeqId,quantity:quantity]"/>
+            </then></if>
 
             <service-call name="popstore.CartServices.get#CartInfo" out-map="context"/>
         </actions>
@@ -368,6 +410,7 @@ General Order Placement and eCommerce Usage
                     <select-field field-name="orderId"/><select-field field-name="orderPartSeqId"/>
                     <order-by field-name="-entryDate"/><!-- get most recent open order -->
                 </entity-find>
+<!--                <log level="warn" message="existingOrderList ${existingOrderList}"/>-->
                 <if condition="existingOrderList">
                     <set field="cartOrderId" from="existingOrderList[0].orderId"/>
                     <set field="sessionAttributes.cartOrderId" from="cartOrderId"/>
