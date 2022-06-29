@@ -449,34 +449,47 @@ along with this software (see the LICENSE.md file). If not, see
         <actions>
             <service-call name="popstore.PrestashopServices.get#ProductStoreId" in-map="[requestHostName:requestHostName]" out-map="context"/>
 
+            <entity-find entity-name="moqui.basic.Geo" list="geoList">
+                <econdition field-name="geoTypeEnumId" value="GEOT_COUNTRY"/>
+                <order-by field-name="geoName"/>
+            </entity-find>
+
+<!--            <log level="warn" message="geoList ${geoList.geoId.groupBy{it}}"/>-->
+
             <!-- Start Prestashop Stuff -->
-            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopAddressForm.json',false))"/>
-<!--            <set field="code" from="200"/>-->
-<!--            <set field="psdata" from="[ products:[] ]"/>-->
-<!--            <iterate list="productSearchResults?.productList" entry="product">-->
-<!--                <script>psdata.products.add([-->
-<!--                    id_product: product?.productId,-->
-<!--                    name: product?.productName,-->
-<!--                    link_rewrite: product?.productId,-->
-<!--                    regular_price_amount: product?.listPrice,-->
-<!--                    price_amount: product?.price,-->
-<!--                    cover: [url: "${ec.web.requestUrl.minus(ec.web.request.requestURI).substring(0, ec.web.requestUrl.minus(ec.web.request.requestURI).lastIndexOf('?'))}/store/content/productImage/${product?.mediumImageInfo?.productContentId ?: product?.smallImageInfo?.productContentId}"]-->
-<!--                    ]);</script>-->
-<!--                &lt;!&ndash;                <log level="warn" message="product ${product?.toString()}"/>&ndash;&gt;-->
-<!--            </iterate>-->
+<!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopAddressForm.json',false))"/>-->
+            <set field="code" from="200"/>
+            <set field="psdata" from="[ countries: geoList.geoId.groupBy{it} ]"/>
+<!--            <log level="warn" message="psdata.countries ${psdata.countries}"/>-->
+            <iterate list="psdata.countries" entry="country">
+                <service-call name="org.moqui.impl.BasicServices.get#GeoRegionsForDropDown"
+                              in-map="[geoId:country.key]" out-map="regionList"/>
 
-            <!--            <log level="warn" message="psdata ${psdata.toString()}"/>-->
+                <set field="statesList" from="[]"/>
+                <iterate list="regionList?.resultList" entry="region">
+                    <script>statesList.add([
+                        id_state: region.geoId,
+                        name: region.geoName
+                        ])</script>
+                </iterate>
 
-            <set field="psdata" from="data?.psdata"/>
-            <set field="code" from="data?.code"/>
-            <log level="warn" message="get#ProductSearch"/>
-            <!--            <log level="warn" message="context ${context.toString()}"/>-->
+                <set field="psdata.countries[country.key]" from="[
+                    id_country: country.key,
+                    name: geoList?.find{it.geoId == country.key}?.geoName,
+                    states: statesList,
+                    zip_code_format: 'NNNNN',
+                    need_zip_code: '1'
+                ]"/>
+
+<!--                <log level="warn" message="country ${country}"/>-->
+            </iterate>
+<!--            <log level="warn" message="psdata ${psdata}"/>-->
 
 <!--            <set field="psdata" from="data?.psdata"/>-->
             <log level="warn" message="get#AddressForm"/>
+            <!--            <log level="warn" message="context ${context.toString()}"/>-->
         </actions>
     </service>
-
     <service verb="get" noun="Cart">
         <in-parameters>
             <parameter name="update"/>
@@ -558,7 +571,99 @@ along with this software (see the LICENSE.md file). If not, see
 
 <!--            <set field="psdata" from="data?.psdata"/>-->
             <log level="warn" message="get#Cart"/>
+<!--            <log level="warn" message="context ${context.toString()}"/>-->
+        </actions>
+    </service>
+
+    <service verb="register" noun="Customer">
+        <in-parameters>
+            <!-- Prestashop Only API Attributes -->
+            <parameter name="email"><text-email/></parameter>
+            <parameter name="firstName"/>
+            <parameter name="lastName"/>
+            <parameter name="password"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="code" type="Integer"/>
+            <parameter name="psdata" type="Map"/>
+        </out-parameters>
+        <actions>
+            <log level="warn" message="email ${email}"/>
+            <log level="warn" message="firstName ${firstName}"/>
+            <log level="warn" message="lastName ${lastName}"/>
+            <log level="warn" message="password ${password}"/>
+
+            <set field="emailAddress" from="email"/>
+            <set field="newPassword" from="password"/>
+            <set field="newPasswordVerify" from="password"/>
+            <service-call name="popstore.CustomerServices.register#Customer" in-map="context" out-map="customerMap"/>
+
+            <log level="warn" message="customerMap ${customerMap}"/>
+
+            <!-- Start Prestashop Stuff -->
+<!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopRegister.json',false))"/>-->
+            <set field="code" from="200"/>
+            <set field="psdata" from="[
+                registered: customerMap?.customerInfo?.partyId != null,
+                message: 'User registered successfully',
+                customer_id:customerMap?.customerInfo?.partyId,
+                session_data:ec.web.sessionToken
+            ]"/>
+            <log level="warn" message="psdata ${psdata}"/>
+
+            <!--            <set field="psdata" from="data?.psdata"/>-->
+            <log level="warn" message="register#Customer ${data}"/>
+        </actions>
+    </service>
+    <service verb="login" noun="Customer">
+        <in-parameters>
+            <parameter name="email"><text-email/></parameter>
+            <parameter name="username" required="true" default="email"/>
+            <parameter name="password" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="code" type="Integer"/>
+            <parameter name="psdata" type="Map"/>
+        </out-parameters>
+        <actions>
+            <log level="warn" message="email ${email}"/>
+            <log level="warn" message="username ${username}"/>
+            <log level="warn" message="password ${password}"/>
+
+            <set field="emailAddress" from="email"/>
+            <set field="username" from="emailAddress"/>
+            <service-call name="popstore.CustomerServices.login#Customer" in-map="context" out-map="customerMap"/>
+
             <log level="warn" message="context ${context.toString()}"/>
+
+            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopLogin.json',false))"/>
+
+            <!-- Start Prestashop Stuff -->
+            <set field="code" from="200"/>
+            <entity-find-one entity-name="mantle.party.PersonAndUserAccount" value-field="personUser" auto-field-map="[partyId:ec.user?.userAccount?.partyId]"/>
+            <set field="psdata" from="[
+                registered: customerMap?.customerInfo?.partyId != null,
+                message: 'User registered successfully',
+                customer_id:customerMap?.customerInfo?.partyId,
+                session_data:ec.web.sessionToken,
+                user: [
+                    firstname: personUser?.firstName,
+                    lastname: personUser?.lastName,
+                    email: ec.user?.userAccount?.emailAddress,
+                    id_gender: personUser?.gender ? (personUser?.gender == 'Y' ? 1 : 0 ) : null
+                ]
+            ]"/>
+            <log level="warn" message="psdata ${psdata}"/>
+
+            <!--            <set field="psdata" from="data?.psdata"/>-->
+            <log level="warn" message="login#Customer"/>
+        </actions>
+    </service>
+    <service verb="logout" noun="Customer" authenticate="anonymous-all">
+        <actions>
+            <script>ec.user.logoutUser()</script>
         </actions>
     </service>
     <service verb="get" noun="AccountInfo">
@@ -571,10 +676,26 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="psdata" type="Map"/>
         </out-parameters>
         <actions>
-            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopAccountInfo.json',false))"/>
-            <set field="code" from="data?.code"/>
-            <set field="success" from="data?.success"/>
-            <set field="psdata" from="data?.psdata"/>
+            <log level="warn" message="menu_with_images ${menu_with_images}"/>
+
+<!--            <log level="warn" message="ec.user?.userAccount ${ec.user?.userAccount}"/>-->
+
+            <!-- Start Prestashop Stuff -->
+<!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopAccountInfo.json',false))"/>-->
+            <set field="code" from="200"/>
+
+            <entity-find-one entity-name="mantle.party.PersonAndUserAccount" value-field="personUser" auto-field-map="[partyId:ec.user?.userAccount?.partyId]"/>
+            <log level="warn" message="personUser ${personUser}"/>
+            <set field="psdata" from="[
+                firstname: personUser?.firstName,
+                lastname: personUser?.lastName,
+                email: ec.user?.userAccount?.emailAddress,
+                id_gender: personUser?.gender ? (personUser?.gender == 'Y' ? 1 : 2 ) : null
+            ]"/>
+            <log level="warn" message="psdata ${psdata}"/>
+
+
+<!--            <set field="psdata" from="data?.psdata"/>-->
             <log level="warn" message="get#AccountInfo"/>
         </actions>
     </service>
@@ -594,36 +715,35 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="psdata" type="Map"/>
         </out-parameters>
         <actions>
-            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopAccountEdit.json',false))"/>
-            <set field="code" from="data?.code"/>
-            <set field="success" from="data?.success"/>
-            <set field="psdata" from="data?.psdata"/>
-            <log level="warn" message="get#AccountEdit"/>
-        </actions>
-    </service>
-    <service verb="post" noun="Address">
-        <in-parameters>
-            <!-- Prestashop Only API Attributes -->
-            <parameter name="alias"/>
-            <parameter name="postcode"/>
-            <parameter name="address1"/>
-            <parameter name="id_country"/>
-            <parameter name="country"/>
-            <parameter name="id_state"/>
-            <parameter name="city"/>
-            <parameter name="company"/>
-        </in-parameters>
-        <out-parameters>
-            <parameter name="success" type="Boolean"/>
-            <parameter name="code" type="Integer"/>
-            <parameter name="psdata" type="Map"/>
-        </out-parameters>
-        <actions>
-            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopAddress.json',false))"/>
-            <set field="code" from="data?.code"/>
-            <set field="success" from="data?.success"/>
-            <set field="psdata" from="data?.psdata"/>
-            <log level="warn" message="get#AccountEdit"/>
+            <log level="warn" message="email ${email}"/>
+            <log level="warn" message="firstName ${firstName}"/>
+            <log level="warn" message="lastName ${lastName}"/>
+            <log level="warn" message="password ${password}"/>
+            <log level="warn" message="gender ${gender}"/>
+            <log level="warn" message="new_password ${new_password}"/>
+
+            <set field="emailAddress" from="email"/>
+            <set field="username" from="emailAddress"/>
+            <set field="gender" from="gender ? (gender == 1 ? 'Y' : 'N') : null"/>
+            <service-call name="popstore.CustomerServices.update#Customer" in-map="context" out-map="customerMap"/>
+
+            <log level="warn" message="customerMap ${customerMap}"/>
+
+<!--            <log level="warn" message="context ${context.toString()}"/>-->
+
+            <!-- Start Prestashop Stuff -->
+<!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopAccountEdit.json',false))"/>-->
+            <set field="code" from="200"/>
+            <set field="psdata" from="[
+                registered: customerMap?.customerInfo?.partyId != null,
+                message: 'User updated successfully',
+                customer_id:customerMap?.customerInfo?.partyId,
+                session_data:ec.web.sessionToken
+            ]"/>
+            <log level="warn" message="psdata ${psdata}"/>
+
+<!--            <set field="psdata" from="data?.psdata"/>-->
+            <log level="warn" message="post#AccountEdit"/>
         </actions>
     </service>
     <service verb="get" noun="OrderHistory">
@@ -653,20 +773,52 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="psdata" type="Map"/>
         </out-parameters>
         <actions>
-            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopAllAddresses.json',false))"/>
-            <set field="code" from="data?.code"/>
-            <set field="success" from="data?.success"/>
-            <set field="psdata" from="data?.psdata"/>
+            <log level="warn" message="menu_with_images ${menu_with_images}"/>
+
+            <service-call name="popstore.CustomerServices.get#ShippingAddresses" out-map="context"/>
+
+<!--            <log level="warn" message="context ${context.toString()}"/>-->
+
+            <!-- Start Prestashop Stuff -->
+<!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopAllAddresses.json',false))"/>-->
+            <set field="code" from="200"/>
+
+            <set field="psdata" from="postalAddressList?.postalContactMechId?.groupBy{it}"/>
+            <iterate list="psdata" entry="postalAddressListItem">
+                <set field="postalAddress" from="postalAddressList?.find{it.postalContactMechId == postalAddressListItem.key}"/>
+<!--                <set field="postalAddress" from="postalAddressListItem.key"/>-->
+                <log level="warn" message="postalAddress ${postalAddress}"/>
+                <set field="psdata[postalAddressListItem.key]" from="[
+                    id: postalAddress?.postalContactMechId,
+                    alias: postalAddress?.postalAddress?.attnName,
+                    address1: postalAddress?.postalAddress?.address1,
+                    postcode: postalAddress?.postalAddress?.postalCode,
+                    city: postalAddress?.postalAddress?.city,
+                    id_state: postalAddress?.postalAddressStateGeo?.geoId,
+                    state: postalAddress?.postalAddressStateGeo?.geoName,
+                    id_country: postalAddress?.postalAddress?.countryGeoId,
+                    country: postalAddress?.postalAddressCountryGeo?.geoName,
+                    phone: postalAddress?.telecomNumber
+                ]"/>
+            </iterate>
+            <log level="warn" message="psdata ${psdata}"/>
+
+<!--            <set field="psdata" from="data?.psdata"/>-->
             <log level="warn" message="get#AllAddresses"/>
         </actions>
     </service>
-    <service verb="register" noun="Customer">
+    <service verb="post" noun="Address">
         <in-parameters>
             <!-- Prestashop Only API Attributes -->
-            <parameter name="email"><text-email/></parameter>
-            <parameter name="firstName"/>
-            <parameter name="lastName"/>
-            <parameter name="password"/>
+            <parameter name="id_address"/>
+            <parameter name="alias"/>
+            <parameter name="postcode"/>
+            <parameter name="address1"/>
+            <parameter name="id_country"/>
+            <parameter name="country"/>
+            <parameter name="id_state"/>
+            <parameter name="city"/>
+            <parameter name="company"/>
         </in-parameters>
         <out-parameters>
             <parameter name="success" type="Boolean"/>
@@ -674,18 +826,42 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="psdata" type="Map"/>
         </out-parameters>
         <actions>
-            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopRegister.json',false))"/>
-            <set field="code" from="data?.code"/>
-            <set field="success" from="data?.success"/>
-            <set field="psdata" from="data?.psdata"/>
-            <log level="warn" message="register#Customer ${data}"/>
+            <log level="warn" message="id_address ${id_address}"/>
+            <log level="warn" message="alias ${alias}"/>
+            <log level="warn" message="postcode ${postcode}"/>
+            <log level="warn" message="address1 ${address1}"/>
+            <log level="warn" message="id_country ${id_country}"/>
+            <log level="warn" message="country ${country}"/>
+            <log level="warn" message="id_state ${id_state}"/>
+            <log level="warn" message="city ${city}"/>
+            <log level="warn" message="company ${company}"/>
+
+            <set field="postalContactMechId" from="id_address"/>
+            <set field="postalCode" from="postcode"/>
+            <set field="countryGeoId" from="id_country"/>
+            <set field="stateProvinceGeoId" from="id_state"/>
+            <set field="attnName" from="alias"/>
+            <service-call name="popstore.CustomerServices.store#ShippingAddress" in-map="context" out-map="context"/>
+
+            <log level="warn" message="context ${context.toString()}"/>
+
+            <!-- Start Prestashop Stuff -->
+<!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopAddress.json',false))"/>-->
+            <set field="code" from="200"/>
+
+            <service-call name="popstore.PrestashopServices.get#AllAddresses" out-map="context"/>
+
+            <set field="message" value="Successfully added address"/>
+            <log level="warn" message="psdata ${psdata}"/>
+
+<!--            <set field="psdata" from="data?.psdata"/>-->
+            <log level="warn" message="post#Address"/>
         </actions>
     </service>
-    <service verb="login" noun="Customer">
+    <service verb="delete" noun="Address">
         <in-parameters>
-            <parameter name="email"><text-email/></parameter>
-            <parameter name="username" required="true" default="email"/>
-            <parameter name="password" required="true"/>
+            <!-- Prestashop Only API Attributes -->
+            <parameter name="id_address" type="Map"/>
         </in-parameters>
         <out-parameters>
             <parameter name="success" type="Boolean"/>
@@ -693,17 +869,34 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="psdata" type="Map"/>
         </out-parameters>
         <actions>
-            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopLogin.json',false))"/>
-            <set field="code" from="data?.code"/>
-            <set field="success" from="data?.success"/>
-            <set field="psdata" from="data?.psdata"/>
+            <log level="warn" message="id_address ${id_address}"/>
+
+            <set field="contactMechId" from="id_address?.id"/>
+            <service-call name="popstore.CustomerServices.delete#ShippingAddress" in-map="context" out-map="context"/>
+
+            <!-- Start Prestashop Stuff -->
+            <!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopAddress.json',false))"/>-->
+            <set field="code" from="200"/>
+            <set field="message" value="Successfully deleted address"/>
+            <set field="psdata" from="[
+                    id: null,
+                    alias: null,
+                    address1: null,
+                    postcode: null,
+                    city: null,
+                    id_state: null,
+                    state: null,
+                    id_country: null,
+                    country: null,
+                    phone: null
+                ]"/>
+            <log level="warn" message="psdata ${psdata}"/>
+
+            <!--            <set field="psdata" from="data?.psdata"/>-->
+            <log level="warn" message="post#Address"/>
         </actions>
     </service>
-    <service verb="logout" noun="Customer" authenticate="anonymous-all">
-        <actions>
-            <script>ec.user.logoutUser()</script>
-        </actions>
-    </service>
+
 
 </services>
 

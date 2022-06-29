@@ -39,12 +39,21 @@ along with this software (see the LICENSE.md file). If not, see
     <resource name="productSearch" require-authentication="anonymous-view">
         <method type="get"><service name="popstore.PrestashopServices.get#ProductSearch"/></method>
     </resource>
-
-    <!-- Cart, Account, and Authentication -->
     <resource name="cart" require-authentication="anonymous-view">
         <method type="get"><service name="popstore.PrestashopServices.get#Cart"/></method>
     </resource>
-    <resource name="accountInfo">
+
+    <!-- Cart, Account, and Authentication -->
+    <resource name="register" require-authentication="anonymous-all">
+        <method type="post"><service name="popstore.PrestashopServices.register#Customer"/></method>
+    </resource>
+    <resource name="login" require-authentication="anonymous-view">
+        <method type="post"><service name="popstore.PrestashopServices.login#Customer"/></method>
+    </resource>
+    <resource name="logout" require-authentication="anonymous-view">
+        <method type="get"><service name="popstore.PrestashopServices.logout#Customer"/></method>
+    </resource>
+    <resource name="accountInfo"  require-authentication="anonymous-view">
         <method type="get"><service name="popstore.PrestashopServices.get#AccountInfo"/></method>
     </resource>
     <resource name="addressform" require-authentication="anonymous-view">
@@ -53,23 +62,15 @@ along with this software (see the LICENSE.md file). If not, see
     <resource name="accountedit" require-authentication="anonymous-view">
         <method type="post"><service name="popstore.PrestashopServices.post#AccountEdit"/></method>
     </resource>
-    <resource name="address" require-authentication="anonymous-view">
-        <method type="post"><service name="popstore.PrestashopServices.post#Address"/></method>
-    </resource>
     <resource name="orderhistory" require-authentication="anonymous-view">
         <method type="get"><service name="popstore.PrestashopServices.get#OrderHistory"/></method>
     </resource>
     <resource name="alladdresses" require-authentication="anonymous-view">
         <method type="get"><service name="popstore.PrestashopServices.get#AllAddresses"/></method>
     </resource>
-    <resource name="register" require-authentication="anonymous-view">
-        <method type="post"><service name="popstore.PrestashopServices.register#Customer"/></method>
-    </resource>
-    <resource name="login" require-authentication="anonymous-view">
-        <method type="post"><service name="popstore.PrestashopServices.login#Customer"/></method>
-    </resource>
-    <resource name="logout" require-authentication="anonymous-view">
-        <method type="get"><service name="popstore.PrestashopServices.logout#Customer"/></method>
+    <resource name="address" require-authentication="anonymous-view">
+        <method type="post"><service name="popstore.PrestashopServices.post#Address"/></method>
+        <method type="delete"><service name="popstore.PrestashopServices.delete#Address"/></method>
     </resource>
 
     <!-- Store Services -->

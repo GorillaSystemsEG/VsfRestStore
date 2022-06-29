@@ -1,1 +1,10 @@
-{"success":true,"code":200,"psdata":{"registered":true,"message":"User registered successfully","customer_id":"132","session_data":1416}}
+{
+  "success": true,
+  "code": 200,
+  "psdata":{
+    "registered": true,
+    "message": "User registered successfully",
+    "customer_id": "132",
+    "session_data": 1416
+  }
+}
