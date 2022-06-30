@@ -386,11 +386,48 @@ along with this software (see the LICENSE.md file). If not, see
                     ])</script>
 <!--                <log level="warn" message="psdata ${ec.l10n.format(review?.postedDateTime,'MM/dd/yy HH:mm a')?.getClass()}"/>-->
             </iterate>
-<!--            <log level="warn" message="psdata last ${psdata.toString()}"/>-->
+            <log level="warn" message="psdata last ${psdata.toString()}"/>
 
 <!--            <set field="psdata" from="data?.psdata"/>-->
             <log level="warn" message="list#Comments"/>
 <!--            <log level="warn" message="context ${context.toString()}"/>-->
+        </actions>
+    </service>
+    <service verb="post" noun="Comments">
+        <in-parameters>
+            <!-- Prestashop Only API Attributes -->
+            <parameter name="id_product"/>
+            <parameter name="comment_title"/>
+            <parameter name="comment_content"/>
+            <parameter name="criterion" type="Map"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="code" type="Integer"/>
+            <parameter name="psdata" type="Map"/>
+        </out-parameters>
+        <actions>
+            <log level="warn" message="id_product ${id_product}"/>
+            <log level="warn" message="comment_title ${comment_title}"/>
+            <log level="warn" message="comment_content ${comment_content}"/>
+            <log level="warn" message="criterion ${criterion}"/>
+            <log level="warn" message="criterion['1'] ${criterion['1']}"/>
+
+            <service-call name="popstore.PrestashopServices.get#ProductStoreId" in-map="[requestHostName:requestHostName]" out-map="context"/>
+
+            <set field="productId" from="id_product"/>
+            <set field="productRating" from="criterion['1']"/>
+            <set field="productReview" from="comment_content"/>
+            <service-call name="popstore.ProductServices.create#ProductReview" in-map="context"/>
+
+            <!-- Start Prestashop Stuff -->
+            <set field="success" from="true"/>
+            <set field="code" from="200"/>
+<!--            <log level="warn" message="psdata last ${psdata.toString()}"/>-->
+
+            <!--            <set field="psdata" from="data?.psdata"/>-->
+            <log level="warn" message="post#Comments"/>
+            <!--            <log level="warn" message="context ${context.toString()}"/>-->
         </actions>
     </service>
     <service verb="get" noun="ProductSearch">
@@ -694,7 +731,6 @@ along with this software (see the LICENSE.md file). If not, see
             ]"/>
             <log level="warn" message="psdata ${psdata}"/>
 
-
 <!--            <set field="psdata" from="data?.psdata"/>-->
             <log level="warn" message="get#AccountInfo"/>
         </actions>
@@ -748,6 +784,7 @@ along with this software (see the LICENSE.md file). If not, see
     </service>
     <service verb="get" noun="OrderHistory">
         <in-parameters>
+            <parameter name="id_order"/>
             <parameter name="menu_with_images"/>
         </in-parameters>
         <out-parameters>
@@ -756,10 +793,80 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="psdata" type="Map"/>
         </out-parameters>
         <actions>
-            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopOrderHistory.json',false))"/>
-            <set field="code" from="data?.code"/>
-            <set field="success" from="data?.success"/>
-            <set field="psdata" from="data?.psdata"/>
+            <log level="warn" message="id_order ${id_order}"/>
+            <log level="warn" message="menu_with_images ${menu_with_images}"/>
+
+            <log level="warn" message="context.toString() ${context.toString()}"/>
+
+            <set field="orderId" from="id_order"/>
+            <set field="orderItemList" from="[]"/>
+            <if condition="orderId">
+                <then><service-call name="popstore.CartServices.get#OrderInfo" in-map="[orderId:orderId]" out-map="context"/></then>
+                <else><service-call name="popstore.CartServices.get#CustomerOrders" out-map="context"/></else>
+            </if>
+
+            <log level="warn" message="context.toString() ${context.toString()}"/>
+            <log level="warn" message="orderItemList?.productId ${orderItemList?.productId?.groupBy{it}}"/>
+
+            <!-- Start Prestashop Stuff -->
+<!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopOrderHistory.json',false))"/>-->
+            <set field="code" from="200"/>
+            <set field="psdata" from="[]"/>
+            <if condition="orderId">
+                <then>
+                    <entity-find-one entity-name="moqui.basic.StatusItem" auto-field-map="[statusId:orderPart.statusId]" value-field="statusItem" cache="true"/>
+                    <set field="orderItemSeqIdList" from="[]"/>
+
+                    <set field="orderItemNormalList" from="[:]"/>
+                    <iterate list="orderItemList" entry="orderItem">
+                        <script>orderItemNormalList.put(orderItem.orderItemSeqId,orderItem.orderItemSeqId)</script>
+                    </iterate>
+
+                    <script>psdata=[
+                        id_order: orderId,
+                        date_add: ec.l10n.format(orderHeader.entryDate,'yyyy-MM-dd HH:mm:ss'),
+                        order_state: statusItem?.description ?: orderPart.statusId,
+                        total_paid: totalUnpaid,
+                        products: orderItemNormalList
+                        ]</script>
+<!--                    <set field="newProducts" from="psdata?.products[0]"/>-->
+<!--                    <log level="warn" message="newProducts ${newProducts}"/>-->
+<!--                    <script>psdata.products=newProducts</script>-->
+<!--                    <log level="warn" message="psdata?.products ${psdata?.products}"/>-->
+
+                    <iterate list="psdata.products" entry="orderItemMap">
+<!--                        <log level="warn" message="psdata.products[orderItemMap.key] ${orderItemMap}"/>-->
+                        <filter-map-list list="orderItemList" to-list="orderItemFilteredList">
+                            <field-map field-name="orderItemSeqId" from="orderItemMap.value"/>
+                        </filter-map-list>
+                        <set field="orderItem" from="orderItemFilteredList[0]"/>
+<!--                        <log level="warn" message="orderItem ${orderItem}"/>-->
+
+                        <set field="psdata.products[orderItemMap.key]" from="[
+                            id_product: orderItem?.productId,
+                            product_name: orderItem?.itemDescription,
+                            quantity: orderItem?.quantity,
+                            product_price: orderItem?.unitAmount,
+                            link_rewrite: orderItem?.productId
+                        ]"/>
+                    </iterate>
+<!--                    <log level="warn" message="newProducts ${newProducts}"/>-->
+                </then><else>
+                    <iterate list="orderInfoList" entry="orderInfo">
+                        <log level="warn" message="orderInfo ${orderInfo.toString()}"/>
+                        <entity-find-one entity-name="moqui.basic.StatusItem" auto-field-map="[statusId:orderInfo.partStatusId]" value-field="statusItem" cache="true"/>
+                        <script>psdata.add([
+                            id_order: orderInfo.orderId,
+                            date_add: ec.l10n.format(orderInfo.entryDate,'yyyy-MM-dd HH:mm:ss'),
+                            order_state: statusItem?.description ?: orderInfo.partStatusId,
+                            total_paid: orderInfo.partTotal,
+                            orderDetails: []
+                            ])</script>
+                    </iterate>
+            </else></if>
+            <log level="warn" message="psdata ${psdata}"/>
+
+<!--            <set field="psdata" from="data?.psdata"/>-->
             <log level="warn" message="get#OrderHistory"/>
         </actions>
     </service>
