@@ -31,6 +31,11 @@ along with this software (see the LICENSE.md file). If not, see
         </out-parameters>
         <actions>
             <set field="productStoreId" default-value="POPC_DEFAULT"/>
+            <set field="sessionAttributes" from="ec.web.sessionAttributes"/>
+            <if condition="!sessionAttributes.productStoreId &amp;&amp; productStoreId">
+                <set field="sessionAttributes.productStoreId" from="productStoreId"/>
+            </if>
+
             <return/>
 
             <!-- TODO: Get multiple stores working and not hard coded -->
@@ -713,7 +718,7 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="psdata" type="Map"/>
         </out-parameters>
         <actions>
-            <log level="warn" message="menu_with_images ${menu_with_images}"/>
+<!--            <log level="warn" message="menu_with_images ${menu_with_images}"/>-->
 
 <!--            <log level="warn" message="ec.user?.userAccount ${ec.user?.userAccount}"/>-->
 
@@ -722,14 +727,14 @@ along with this software (see the LICENSE.md file). If not, see
             <set field="code" from="200"/>
 
             <entity-find-one entity-name="mantle.party.PersonAndUserAccount" value-field="personUser" auto-field-map="[partyId:ec.user?.userAccount?.partyId]"/>
-            <log level="warn" message="personUser ${personUser}"/>
+<!--            <log level="warn" message="personUser ${personUser}"/>-->
             <set field="psdata" from="[
                 firstname: personUser?.firstName,
                 lastname: personUser?.lastName,
                 email: ec.user?.userAccount?.emailAddress,
                 id_gender: personUser?.gender ? (personUser?.gender == 'Y' ? 1 : 2 ) : null
             ]"/>
-            <log level="warn" message="psdata ${psdata}"/>
+<!--            <log level="warn" message="psdata ${psdata}"/>-->
 
 <!--            <set field="psdata" from="data?.psdata"/>-->
             <log level="warn" message="get#AccountInfo"/>
@@ -880,7 +885,7 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="psdata" type="Map"/>
         </out-parameters>
         <actions>
-            <log level="warn" message="menu_with_images ${menu_with_images}"/>
+<!--            <log level="warn" message="menu_with_images ${menu_with_images}"/>-->
 
             <service-call name="popstore.CustomerServices.get#ShippingAddresses" out-map="context"/>
 
@@ -894,7 +899,7 @@ along with this software (see the LICENSE.md file). If not, see
             <iterate list="psdata" entry="postalAddressListItem">
                 <set field="postalAddress" from="postalAddressList?.find{it.postalContactMechId == postalAddressListItem.key}"/>
 <!--                <set field="postalAddress" from="postalAddressListItem.key"/>-->
-                <log level="warn" message="postalAddress ${postalAddress}"/>
+<!--                <log level="warn" message="postalAddress ${postalAddress}"/>-->
                 <set field="psdata[postalAddressListItem.key]" from="[
                     id: postalAddress?.postalContactMechId,
                     alias: postalAddress?.postalAddress?.attnName,
@@ -908,7 +913,7 @@ along with this software (see the LICENSE.md file). If not, see
                     phone: postalAddress?.telecomNumber
                 ]"/>
             </iterate>
-            <log level="warn" message="psdata ${psdata}"/>
+<!--            <log level="warn" message="psdata ${psdata}"/>-->
 
 <!--            <set field="psdata" from="data?.psdata"/>-->
             <log level="warn" message="get#AllAddresses"/>
@@ -950,7 +955,7 @@ along with this software (see the LICENSE.md file). If not, see
             <set field="attnName" from="alias"/>
             <service-call name="popstore.CustomerServices.store#ShippingAddress" in-map="context" out-map="context"/>
 
-            <log level="warn" message="context ${context.toString()}"/>
+<!--            <log level="warn" message="context ${context.toString()}"/>-->
 
             <!-- Start Prestashop Stuff -->
 <!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopAddress.json',false))"/>-->
@@ -1001,6 +1006,164 @@ along with this software (see the LICENSE.md file). If not, see
 
             <!--            <set field="psdata" from="data?.psdata"/>-->
             <log level="warn" message="post#Address"/>
+        </actions>
+    </service>
+    <service verb="set" noun="AddressCheckout">
+        <in-parameters>
+            <!-- Prestashop Only API Attributes -->
+            <parameter name="id_address"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="code" type="Integer"/>
+            <parameter name="psdata" type="Map"/>
+        </out-parameters>
+        <actions>
+            <log level="warn" message="Address Checkout context ${context.toString()}"/>
+
+<!--            <set field="sessionAttributes" from="ec.web.sessionAttributes"/>-->
+<!--            <set field="shippingPostalContactMechId" from="id_address"/>-->
+<!--            <set field="shippingPostalContactMechId" from="id_address"/>-->
+<!--            <set field="sessionAttributes.shippingPostalContactMechId" from="shippingPostalContactMechId"/>-->
+
+            <!-- Start Prestashop Stuff -->
+            <set field="code" from="200"/>
+            <set field="psdata" from="[:]"/>
+            <log level="warn" message="psdata ${psdata}"/>
+
+            <!--            <set field="psdata" from="data?.psdata"/>-->
+            <log level="warn" message="set#AddressCheckout"/>
+        </actions>
+    </service>
+    <service verb="get" noun="Carriers">
+        <in-parameters>
+            <!-- Prestashop Only API Attributes -->
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="code" type="Integer"/>
+            <parameter name="psdata" type="Map"/>
+        </out-parameters>
+        <actions>
+            <service-call name="popstore.CartServices.get#ShippingOptions" out-map="context"/>
+
+            <entity-find-one entity-name="mantle.order.OrderHeader" value-field="orderHeader" auto-field-map="[orderId:cartOrderId]"/>
+
+            <log level="warn" message="Carriers context ${context.toString()}"/>
+
+            <!-- Start Prestashop Stuff -->
+            <!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopAddress.json',false))"/>-->
+            <set field="code" from="200"/>
+            <set field="psdata" from="[:]"/>
+            <iterate list="shippingOptions" entry="shippingOption">
+                <script>psdata.put("${shippingOption.carrierPartyId}:${shippingOption.shipmentMethodEnumId}", [
+                    id: shippingOption.carrierPartyId+shippingOption.shipmentMethodEnumId,
+                    name: shippingOption.carrierName &amp;&amp; shippingOption.carrierName != '_NA_' ? shippingOption.carrierName + ' : ' + shippingOption.shipmentMethodDescription : shippingOption.shipmentMethodDescription,
+                    delay: ec.l10n.formatCurrency(shippingTotal, orderHeader?.currencyUomId ?: 'USD') ?: 'FREE'
+                    ])</script>
+            </iterate>
+            <log level="warn" message="psdata ${psdata}"/>
+
+            <!--            <set field="psdata" from="data?.psdata"/>-->
+            <log level="warn" message="get#Carriers"/>
+        </actions>
+    </service>
+    <service verb="set" noun="CarrierCheckout">
+<!--        <in-parameters>-->
+<!--            &lt;!&ndash; Prestashop Only API Attributes &ndash;&gt;-->
+<!--            <parameter name="id_address"/>-->
+<!--            <parameter name="id_carrier"/>-->
+<!--        </in-parameters>-->
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="code" type="Integer"/>
+            <parameter name="psdata" type="Map"/>
+        </out-parameters>
+        <actions>
+            <log level="warn" message="Carrier Checkout context ${context.toString()}"/>
+
+<!--            <set field="sessionAttributes" from="ec.web.sessionAttributes"/>-->
+<!--            <set field="shippingPostalContactMechId" from="id_address"/>-->
+<!--            <set field="shippingPostalContactMechId" from="id_address"/>-->
+<!--            <set field="sessionAttributes.shippingPostalContactMechId" from="shippingPostalContactMechId"/>-->
+
+            <!-- Start Prestashop Stuff -->
+            <set field="code" from="200"/>
+            <set field="psdata" from="[:]"/>
+            <log level="warn" message="psdata ${psdata}"/>
+
+            <!--            <set field="psdata" from="data?.psdata"/>-->
+            <log level="warn" message="set#AddressCheckout"/>
+        </actions>
+    </service>
+    <service verb="get" noun="PaymentOptions">
+        <in-parameters>
+            <!-- Prestashop Only API Attributes -->
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="code" type="Integer"/>
+            <parameter name="psdata" type="Map"/>
+        </out-parameters>
+        <actions>
+            <service-call name="popstore.PrestashopServices.get#ProductStoreId" in-map="[requestHostName:requestHostName]" out-map="context"/>
+
+            <entity-find entity-name="mantle.product.store.ProductStorePaymentGateway" list="storePaymentGatewayList">
+                <econdition field-name="productStoreId" value="${productStoreId}" />
+            </entity-find>
+
+            <log level="warn" message="Payment Options context ${context.toString()}"/>
+
+            <!-- Start Prestashop Stuff -->
+            <!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopAddress.json',false))"/>-->
+            <set field="code" from="200"/>
+            <set field="psdata" from="[:]"/>
+            <iterate list="storePaymentGatewayList" entry="storePaymentGateway">
+                <log level="warn" message="storePaymentGateway ${storePaymentGateway}"/>
+                <entity-find-one entity-name="moqui.basic.Enumeration" value-field="paymentInstrument" auto-field-map="[enumId:storePaymentGateway.paymentInstrumentEnumId]"/>
+                <log level="warn" message="paymentInstrument ${paymentInstrument}"/>
+                <script>psdata.put(paymentInstrument.enumId, [
+                    id: paymentInstrument.enumId,
+                    call_to_action_text: paymentInstrument.description,
+                    module_name: paymentInstrument.enumId
+                    ])</script>
+            </iterate>
+<!--            <log level="warn" message="psdata ${psdata}"/>-->
+
+            <!--            <set field="psdata" from="data?.psdata"/>-->
+            <log level="warn" message="get#PaymentOptions"/>
+        </actions>
+    </service>
+    <service verb="place" noun="Order">
+        <in-parameters>
+            <!-- Prestashop Only API Attributes -->
+<!--            <parameter name="enumId"/>-->
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="code" type="Integer"/>
+            <parameter name="psdata" type="Map"/>
+        </out-parameters>
+        <actions>
+            <service-call name="popstore.CartServices.place#CartOrder" in-map="[cardSecurityCodeByPaymentId:[100000:555]]" out-map="context"/>
+
+            <log level="warn" message="Place Order context ${context.toString()}"/>
+
+            <!-- Start Prestashop Stuff -->
+            <!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopAddress.json',false))"/>-->
+            <set field="code" from="200"/>
+            <set field="psdata" from="[:]"/>
+<!--            <iterate list="paymentOptions" entry="paymentOption">-->
+<!--                <script>psdata.put(paymentOption.enumId, [-->
+<!--                    id: paymentOption.enumId,-->
+<!--                    call_to_action_text: paymentOption.description,-->
+<!--                    module_name: paymentOption.description-->
+<!--                    ])</script>-->
+<!--            </iterate>-->
+<!--            <log level="warn" message="psdata ${psdata}"/>-->
+
+            <!--            <set field="psdata" from="data?.psdata"/>-->
+            <log level="warn" message="place#Order"/>
         </actions>
     </service>
 

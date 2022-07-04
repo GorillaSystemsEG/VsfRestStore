@@ -178,12 +178,12 @@ General Order Placement and eCommerce Usage
             <service-call name="popstore.CartServices.get#ActiveOrderAndCustomer" out-map="context"/>
             <if condition="!customerPartyId"><return message="No active customer, cannot get orders" public="true" type="warning"/></if>
 
-            <entity-find entity-name="mantle.order.OrderHeaderAndPart" list="existingOrderList">
+            <entity-find entity-name="mantle.order.OrderHeaderAndPart" list="existingOrderPartList">
                 <econdition field-name="customerPartyId"/>
                 <order-by field-name="-entryDate"/>
             </entity-find>
             <set field="orderInfoList" from="[]"/>
-            <iterate list="existingOrderList" entry="existingOrder">
+            <iterate list="existingOrderPartList" entry="existingOrder">
                 <script>orderInfoList.add(existingOrder.getMap())</script>
             </iterate>
         </actions>
@@ -404,15 +404,15 @@ General Order Placement and eCommerce Usage
 
             <if condition="!cartOrderId &amp;&amp; customerPartyId">
                 <!-- see if there is an open order for user and get that ID into session -->
-                <entity-find entity-name="mantle.order.OrderHeaderAndPart" list="existingOrderList">
+                <entity-find entity-name="mantle.order.OrderHeaderAndPart" list="existingOrderPartList">
                     <econdition field-name="statusId" value="OrderOpen"/>
                     <econdition field-name="customerPartyId"/>
                     <select-field field-name="orderId"/><select-field field-name="orderPartSeqId"/>
                     <order-by field-name="-entryDate"/><!-- get most recent open order -->
                 </entity-find>
-<!--                <log level="warn" message="existingOrderList ${existingOrderList}"/>-->
-                <if condition="existingOrderList">
-                    <set field="cartOrderId" from="existingOrderList[0].orderId"/>
+<!--                <log level="warn" message="active order existingOrderPartList ${existingOrderPartList}"/>-->
+                <if condition="existingOrderPartList">
+                    <set field="cartOrderId" from="existingOrderPartList[0].orderId"/>
                     <set field="sessionAttributes.cartOrderId" from="cartOrderId"/>
                 </if>
             </if>

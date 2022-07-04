@@ -42,11 +42,11 @@ along with this software (see the LICENSE.md file). If not, see
     <resource name="productSearch" require-authentication="anonymous-view">
         <method type="get"><service name="popstore.PrestashopServices.get#ProductSearch"/></method>
     </resource>
-    <resource name="cart" require-authentication="anonymous-view">
-        <method type="get"><service name="popstore.PrestashopServices.get#Cart"/></method>
-    </resource>
 
     <!-- Cart, Account, and Authentication -->
+    <resource name="cart" require-authentication="anonymous-all">
+        <method type="get"><service name="popstore.PrestashopServices.get#Cart"/></method>
+    </resource>
     <resource name="register" require-authentication="anonymous-all">
         <method type="post"><service name="popstore.PrestashopServices.register#Customer"/></method>
     </resource>
@@ -75,13 +75,30 @@ along with this software (see the LICENSE.md file). If not, see
         <method type="post"><service name="popstore.PrestashopServices.post#Address"/></method>
         <method type="delete"><service name="popstore.PrestashopServices.delete#Address"/></method>
     </resource>
+    <resource name="setaddresscheckout" require-authentication="anonymous-view">
+        <method type="post"><service name="popstore.PrestashopServices.set#AddressCheckout"/></method>
+    </resource>
+    <resource name="carriers" require-authentication="anonymous-view">
+        <method type="get"><service name="popstore.PrestashopServices.get#Carriers"/></method>
+    </resource>
+    <resource name="setcarriercheckout" require-authentication="anonymous-view">
+        <method type="post"><service name="popstore.PrestashopServices.set#CarrierCheckout"/></method>
+    </resource>
+    <resource name="paymentoptions" require-authentication="anonymous-view">
+        <method type="get"><service name="popstore.PrestashopServices.get#PaymentOptions"/></method>
+    </resource>
+    <resource name="rest" require-authentication="anonymous-view">
+        <id name="enumId">
+            <method type="get"><service name="popstore.PrestashopServices.place#Order"/></method>
+        </id>
+    </resource>
 
     <!-- Store Services -->
 
-<!--    <resource name="store" require-authentication="anonymous-view">-->
-<!--        <id name="productStoreId"><method type="get"><service name="popstore.StoreServices.get#StoreInfo"/></method></id>-->
-<!--        <resource name="search"><method type="get"><service name="popstore.SearchServices.search#All"/></method></resource>-->
-<!--    </resource>-->
+    <resource name="store" require-authentication="anonymous-view">
+        <id name="productStoreId"><method type="get"><service name="popstore.StoreServices.get#StoreInfo"/></method></id>
+        <resource name="search"><method type="get"><service name="popstore.SearchServices.search#All"/></method></resource>
+    </resource>
 
     <!-- Login and Register -->
 
@@ -98,58 +115,59 @@ along with this software (see the LICENSE.md file). If not, see
 
     <!-- Geo, Locale, TimeZone -->
 
-<!--    <resource name="geos" require-authentication="anonymous-view">-->
-<!--        <method type="get"><service name="popstore.StoreServices.get#Geos"/></method>-->
-<!--        <id name="geoId">-->
-<!--            <method type="get"><entity name="geos" masterName="default" operation="one"/></method>-->
-<!--            <resource name="regions">-->
-<!--                <method type="get"><service name="org.moqui.impl.BasicServices.get#GeoRegionsForDropDown"/></method></resource>-->
-<!--        </id>-->
-<!--    </resource>-->
-<!--    <resource name="locale" require-authentication="anonymous-view">-->
-<!--        <method type="get"><service name="popstore.StoreServices.get#Locales"/></method>-->
-<!--    </resource>-->
-<!--    <resource name="timeZone" require-authentication="anonymous-view">-->
-<!--        <method type="get"><service name="popstore.StoreServices.get#TimeZones"/></method>-->
-<!--    </resource>-->
+    <resource name="geos" require-authentication="anonymous-view">
+        <method type="get"><service name="popstore.StoreServices.get#Geos"/></method>
+        <id name="geoId">
+            <method type="get"><entity name="geos" masterName="default" operation="one"/></method>
+            <resource name="regions">
+                <method type="get"><service name="org.moqui.impl.BasicServices.get#GeoRegionsForDropDown"/></method></resource>
+        </id>
+    </resource>
+    <resource name="locale" require-authentication="anonymous-view">
+        <method type="get"><service name="popstore.StoreServices.get#Locales"/></method>
+    </resource>
+    <resource name="timeZone" require-authentication="anonymous-view">
+        <method type="get"><service name="popstore.StoreServices.get#TimeZones"/></method>
+    </resource>
 
     <!-- Product Information -->
 
-<!--    <resource name="products" require-authentication="anonymous-view">-->
-<!--        <id name="productId"><method type="get"><service name="popstore.ProductServices.get#ProductInfo"/></method></id>-->
+    <resource name="products" require-authentication="anonymous-view">
+        <id name="productId"><method type="get"><service name="popstore.ProductServices.get#ProductInfo"/></method></id>
 
-<!--        <resource name="reviews">-->
-<!--            <method type="get"><service name="popstore.ProductServices.get#ProductReviews"/></method>-->
-<!--            <method type="post"><service name="popstore.ProductServices.create#ProductReview"/></method>-->
-<!--        </resource>-->
-<!--        <resource name="variants">-->
-<!--            <method type="get"><service name="popstore.ProductServices.get#ProductVariantsDisplayInfo"/></method>-->
-<!--        </resource>-->
-<!--        <resource name="content">-->
-<!--            <method type="get"><service name="popstore.ProductServices.find#ProductContent"/></method>-->
-<!--        </resource>-->
-<!--         <resource name="productQuantity">-->
-<!--            <method type="get"><service name="popstore.ProductServices.get#ProductQuantity"/></method>-->
-<!--        </resource>-->
-<!--        <resource name="CategoryProducts">-->
-<!--            <method type="get"><service name="popstore.ProductServices.get#CategoryProducts"/></method>-->
-<!--        </resource>-->
-<!--        <resource name="SearchProducts">-->
-<!--            <method type="get"><service name="popstore.ProductServices.get#SortedProductList"/></method>-->
-<!--        </resource>-->
-<!--    </resource>-->
-<!--    <resource name="categories" require-authentication="anonymous-view">-->
-<!--        <id name="productCategoryId">-->
-<!--            <resource name="info"><method type="get">-->
-<!--                <service name="popstore.ProductServices.get#CategoryInfo"/></method></resource>-->
-<!--            <resource name="products"><method type="get">-->
-<!--                <service name="popstore.ProductServices.get#CategoryProducts"/></method></resource>-->
-<!--        </id>-->
-<!--    </resource>-->
+        <resource name="reviews">
+            <method type="get"><service name="popstore.ProductServices.get#ProductReviews"/></method>
+            <method type="post"><service name="popstore.ProductServices.create#ProductReview"/></method>
+        </resource>
+        <resource name="variants">
+            <method type="get"><service name="popstore.ProductServices.get#ProductVariantsDisplayInfo"/></method>
+        </resource>
+        <resource name="content">
+            <method type="get"><service name="popstore.ProductServices.find#ProductContent"/></method>
+        </resource>
+         <resource name="productQuantity">
+            <method type="get"><service name="popstore.ProductServices.get#ProductQuantity"/></method>
+        </resource>
+        <resource name="CategoryProducts">
+            <method type="get"><service name="popstore.ProductServices.get#CategoryProducts"/></method>
+        </resource>
+        <resource name="SearchProducts">
+            <method type="get"><service name="popstore.ProductServices.get#SortedProductList"/></method>
+        </resource>
+    </resource>
+    <resource name="categories" require-authentication="anonymous-view">
+        <id name="productCategoryId">
+            <resource name="info"><method type="get">
+                <service name="popstore.ProductServices.get#CategoryInfo"/></method></resource>
+            <resource name="products"><method type="get">
+                <service name="popstore.ProductServices.get#CategoryProducts"/></method></resource>
+        </id>
+    </resource>
 
     <!-- Cart and Checkout -->
-
 <!--    <resource name="cart" require-authentication="anonymous-all">-->
+<!--        <method type="get"><service name="popstore.PrestashopServices.get#Cart"/></method>-->
+
 <!--        <resource name="info">-->
 <!--            <method type="get"><service name="popstore.CartServices.get#CartInfo"/></method>-->
 <!--        </resource>-->
@@ -184,36 +202,36 @@ along with this software (see the LICENSE.md file). If not, see
 
     <!-- Customer Profile and Order History -->
 
-<!--    <resource name="customer" require-authentication="anonymous-view">-->
-<!--        &lt;!&ndash; NOTE: allows current session with customerPartyId server side for customers with no UserAccount (current session only), so auth not required &ndash;&gt;-->
-<!--        <resource name="info">-->
-<!--            <method type="get"><service name="popstore.CustomerServices.get#CustomerInfo"/></method>-->
-<!--        </resource>-->
-<!--        <resource name="updateInfo">-->
-<!--            <method type="put"><service name="popstore.CustomerServices.update#Customer"/></method>-->
-<!--        </resource>-->
-<!--        <resource name="updatePassword" require-authentication="anonymous-all">-->
-<!--            <method type="put"><service name="popstore.CustomerServices.update#CustomerPassword"/></method>-->
-<!--        </resource>-->
-<!--        <resource name="paymentMethods">-->
-<!--            <method type="get"><service name="popstore.CustomerServices.get#PaymentMethods"/></method>-->
-<!--            <method type="put"><service name="popstore.CustomerServices.store#CreditCard"/></method>-->
-<!--            <id name="paymentMethodId">-->
-<!--                <method type="delete"><service name="popstore.CustomerServices.delete#paymentMethod"/></method>-->
-<!--            </id>-->
-<!--        </resource>-->
-<!--        <resource name="shippingAddresses">-->
-<!--            <method type="get"><service name="popstore.CustomerServices.get#ShippingAddresses"/></method>-->
-<!--            <method type="put"><service name="popstore.CustomerServices.store#ShippingAddress"/></method>-->
-<!--            <method type="delete"><service name="popstore.CustomerServices.delete#ShippingAddress"/></method>-->
-<!--        </resource>-->
+    <resource name="customer" require-authentication="anonymous-view">
+        <!-- NOTE: allows current session with customerPartyId server side for customers with no UserAccount (current session only), so auth not required -->
+        <resource name="info">
+            <method type="get"><service name="popstore.CustomerServices.get#CustomerInfo"/></method>
+        </resource>
+        <resource name="updateInfo">
+            <method type="put"><service name="popstore.CustomerServices.update#Customer"/></method>
+        </resource>
+        <resource name="updatePassword" require-authentication="anonymous-all">
+            <method type="put"><service name="popstore.CustomerServices.update#CustomerPassword"/></method>
+        </resource>
+        <resource name="paymentMethods">
+            <method type="get"><service name="popstore.CustomerServices.get#PaymentMethods"/></method>
+            <method type="put"><service name="popstore.CustomerServices.store#CreditCard"/></method>
+            <id name="paymentMethodId">
+                <method type="delete"><service name="popstore.CustomerServices.delete#paymentMethod"/></method>
+            </id>
+        </resource>
+        <resource name="shippingAddresses">
+            <method type="get"><service name="popstore.CustomerServices.get#ShippingAddresses"/></method>
+            <method type="put"><service name="popstore.CustomerServices.store#ShippingAddress"/></method>
+            <method type="delete"><service name="popstore.CustomerServices.delete#ShippingAddress"/></method>
+        </resource>
 
-<!--        <resource name="orders">-->
-<!--            <method type="get"><service name="popstore.CartServices.get#CustomerOrders"/></method>-->
-<!--            <id name="orderId">-->
-<!--                <method type="get"><service name="popstore.CartServices.get#OrderInfo"/></method>-->
-<!--            </id>-->
-<!--        </resource>-->
-<!--    </resource>-->
+        <resource name="orders">
+            <method type="get"><service name="popstore.CartServices.get#CustomerOrders"/></method>
+            <id name="orderId">
+                <method type="get"><service name="popstore.CartServices.get#OrderInfo"/></method>
+            </id>
+        </resource>
+    </resource>
 
 </resource>
