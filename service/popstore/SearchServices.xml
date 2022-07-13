@@ -31,20 +31,20 @@ along with this software (see the LICENSE.md file). If not, see
         </out-parameters>
         <actions>
             <entity-find-one entity-name="mantle.product.store.ProductStore" value-field="productStore" cache="true"/>
-            <set field="productDataDocumentId" from="productStore?.productDataDocumentId"/>
-            <set field="contentDataDocumentId" from="productStore?.contentDataDocumentId"/>
-            <set field="blogDataDocumentId" from="productStore?.blogDataDocumentId"/>
+            <set field="productDataDocumentId" from="productStore?.storeDataDocuments?.find{it.typeEnumId == 'PsdtProduct'}?.dataDocumentId ?: productStore?.productDataDocumentId"/>
+            <set field="contentDataDocumentId" from="productStore?.storeDataDocuments?.find{it.typeEnumId == 'PsdtContent'}?.dataDocumentId ?: productStore?.contentDataDocumentId"/>
+            <set field="blogDataDocumentId" from="productStore?.storeDataDocuments?.find{it.typeEnumId == 'PsdtBlog'}?.dataDocumentId ?: productStore?.blogDataDocumentId"/>
             <if condition="productDataDocumentId">
                 <service-call name="popstore.SearchServices.search#Products" out-map="productSearchResults"
                         in-map="[searchParameter:searchParameter, productDataDocumentId:productDataDocumentId, pageIndex:pageIndex, pageSize:pageSize, productStoreId: productStoreId]"/>
             </if>
             <if condition="contentDataDocumentId">
                 <service-call name="popstore.SearchServices.search#Content" out-map="contentSearchResults"
-                          in-map="[searchParameter:searchParameter, contentDataDocumentId:productStore.contentDataDocumentId, pageIndex:pageIndex, pageSize:pageSize]"/>
+                          in-map="[searchParameter:searchParameter, contentDataDocumentId:contentDataDocumentId, pageIndex:pageIndex, pageSize:pageSize]"/>
             </if>
             <if condition="blogDataDocumentId">
                 <service-call name="popstore.SearchServices.search#Blog" out-map="blogSearchResults"
-                          in-map="[searchParameter:searchParameter, blogDataDocumentId:productStore.blogDataDocumentId, pageIndex:pageIndex, pageSize:pageSize]"/>
+                          in-map="[searchParameter:searchParameter, blogDataDocumentId:blogDataDocumentId, pageIndex:pageIndex, pageSize:pageSize]"/>
             </if>
         </actions>
     </service>
@@ -99,10 +99,28 @@ along with this software (see the LICENSE.md file). If not, see
             <!-- NOTE: with ElasticSearch and a date range query like this there is a time zone issue, reliable by date but not exact time -->
             <set field="nowTimeLong" from="ec.user.nowTimestamp.time"/>
             <script><![CDATA[
-                nestedQueryMap = [categories:"""{"bool":{"must":[ {"match":{"categories.productCategoryId":"${productCategoryId}"}},
-                        {"range":{"categories.categoryFromDate":{"lte":${nowTimeLong}}}},
-                        {"bool":{"should":[{"range":{"categories.categoryThruDate":{"gte":${nowTimeLong}}}}, {"bool":{"must_not":{"exists":{"field":"categories.categoryThruDate"}}}}]}}
-                    ]}}"""]
+                nestedQueryMap = [categories:"""{
+                        "bool":{
+                            "must":[
+                                {"match":
+                                    {"categories.productCategoryId":"${productCategoryId}"}
+                                },
+                                {"range":
+                                    {"categories.categoryFromDate":{"lte":${nowTimeLong}} }
+                                },
+                                {"bool":
+                                    {"should":[
+                                        {"range":
+                                            {"categories.categoryThruDate":{"gte":${nowTimeLong}} }
+                                        },
+                                        {"bool":
+                                            {"must_not":{"exists":{"field":"categories.categoryThruDate"}}}
+                                        }
+                                    ]}
+                                }
+                            ]
+                        }
+                    }"""]
             ]]></script>
             <!-- <log level="warn" message="productDataDocumentId: ${productDataDocumentId}\n queryString: ${queryString}\n nestedQueryMap: ${nestedQueryMap}"/> -->
 

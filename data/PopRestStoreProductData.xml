@@ -17,22 +17,40 @@ along with this software (see the LICENSE.md file). If not, see
     <mantle.product.store.ProductStoreSetting productStoreId="POPC_DEFAULT" settingTypeEnumId="PsstHostname" fromDate="1406670784000" settingValue=".*"/> -->
 
     <!-- TODO - move this somewhere else -->
-    <mantle.product.store.ProductStoreShipOption carrierPartyId="_NA_" lastUpdatedStamp="1545005379532" productStoreId="POPC_DEFAULT" shipmentMethodEnumId="ShMthGround" sequenceNum="2"/>
     <mantle.product.store.ProductStoreShipOption carrierPartyId="_NA_" lastUpdatedStamp="1545005214226" productStoreId="POPC_DEFAULT" shipmentMethodEnumId="ShMthPickUp" sequenceNum="1"/>
+    <mantle.product.store.ProductStoreShipOption carrierPartyId="_NA_" lastUpdatedStamp="1545005379532" productStoreId="POPC_DEFAULT" shipmentMethodEnumId="ShMthGround" sequenceNum="2"/>
 
     <!-- NOTE: depends on and extends/overrides data in ZcaProductDemoData.xml in mantle-udm -->
 
     <!-- ==================== Product Data ==================== -->
 
     <!-- TODO: get original text instead of binary export, fine for demo images but for text makes it impossible to maintain -->
+    <mantle.product.StoreServices.generateUrlSlugFromCategoryName productCategoryId="DEMO_ONE"/>
+    <mantle.product.StoreServices.generateUrlSlugFromCategoryName productCategoryId="DEMO_TWO"/>
+    <mantle.product.StoreServices.generateUrlSlugFromCategoryName productCategoryId="DEMO_THREE"/>
+    <mantle.product.StoreServices.generateUrlSlugFromCategoryName productCategoryId="DEMO_SA"/>
+    <mantle.product.StoreServices.generateUrlSlugFromCategoryName productCategoryId="DEMO_RM"/>
+    <mantle.product.StoreServices.generateUrlSlugFromCategoryName productCategoryId="DEMO_EQUIP"/>
+    <mantle.product.StoreServices.generateUrlSlugFromCategoryName productCategoryId="PopcNew"/>
+    <mantle.product.StoreServices.generateUrlSlugFromCategoryName productCategoryId="PopcHome"/>
+    <mantle.product.StoreServices.generateUrlSlugFromCategoryName productCategoryId="PopcFeatured"/>
+    <mantle.product.StoreServices.generateUrlSlugFromCategoryName productCategoryId="PopcDeals"/>
+    <mantle.product.StoreServices.generateUrlSlugFromCategoryName productCategoryId="PopcBrowseRoot"/>
+    <mantle.product.StoreServices.generateUrlSlugFromCategoryName productCategoryId="PopcAllProducts"/>
+
+    <mantle.product.store.ProductStoreDataDocument productStoreId="POPC_DEFAULT" typeEnumId="PsdtCategory" dataDocumentId="PopcCategory"/>
 
     <mantle.product.category.ProductCategory productCategoryId="DEMO_CLOTHING" productCategoryTypeEnumId="PctCatalog" categoryName="Clothing" description=""/>
+    <mantle.product.StoreServices.generateUrlSlugFromCategoryName productCategoryId="DEMO_CLOTHING"/>
     <mantle.product.category.ProductCategoryRollup productCategoryId="DEMO_CLOTHING" parentProductCategoryId="PopcBrowseRoot" fromDate="1265184000000" sequenceNum="1"/>
     <mantle.product.category.ProductCategory productCategoryId="DEMO_CLOTHING_WOMENS" productCategoryTypeEnumId="PctCatalog" categoryName="Women's Clothing" description=""/>
+    <mantle.product.StoreServices.generateUrlSlugFromCategoryName productCategoryId="DEMO_CLOTHING_WOMENS"/>
     <mantle.product.category.ProductCategoryRollup productCategoryId="DEMO_CLOTHING_WOMENS" parentProductCategoryId="DEMO_CLOTHING" fromDate="1265184000000" sequenceNum="1"/>
     <mantle.product.category.ProductCategory productCategoryId="DEMO_CLOTHING_MENS" productCategoryTypeEnumId="PctCatalog" categoryName="Man's Clothing" description=""/>
+    <mantle.product.StoreServices.generateUrlSlugFromCategoryName productCategoryId="DEMO_CLOTHING_MENS"/>
     <mantle.product.category.ProductCategoryRollup productCategoryId="DEMO_CLOTHING_MENS" parentProductCategoryId="DEMO_CLOTHING" fromDate="1265184000000" sequenceNum="1"/>
     <mantle.product.category.ProductCategory productCategoryId="DEMO_OFFICE" productCategoryTypeEnumId="PctCatalog" categoryName="Office" description=""/>
+    <mantle.product.StoreServices.generateUrlSlugFromCategoryName productCategoryId="DEMO_OFFICE"/>
     <mantle.product.category.ProductCategoryRollup productCategoryId="DEMO_OFFICE" parentProductCategoryId="PopcBrowseRoot" fromDate="1265184000000" sequenceNum="2"/>
 
     <!-- Men's T-Shirt with size only variants -->
@@ -74,6 +92,7 @@ along with this software (see the LICENSE.md file). If not, see
     <!-- call a service to generate variants -->
     <mantle.product.ProductServices.createVariantProducts productId="DEMO_TS_M" productTypeEnumId="PtAsset"
             assetTypeEnumId="AstTpInventory" assetClassEnumId="AsClsInventoryFin" copyCategoryMembers="false"/>
+    <mantle.product.StoreServices.generateUrlSlugFromProductName productId="DEMO_TS_M"/>
 
     <!-- Women's T-Shirt with size and color variants -->
     <mantle.product.Product productId="DEMO_TS_W" productTypeEnumId="PtVirtual" assetTypeEnumId="" assetClassEnumId=""
@@ -109,11 +128,12 @@ along with this software (see the LICENSE.md file). If not, see
     <dbResources resourceId="DEMO_TS_W_ILB" filename="img_TShirtWomanBack.jpg" isFile="Y" parentResourceId="MCNT_PROD_DEMO_TS_W"/>
     <dbResources resourceId="DEMO_TS_W_DL" filename="description.html" isFile="Y" parentResourceId="MCNT_PROD_DEMO_TS_W"/>
     <moqui.resource.DbResourceFile resourceId="DEMO_TS_W_DL" rootVersionName="01" mimeType="text/html" versionName="01">
-        <fileData><![CDATA[PHA+MTAwJSBjb3R0b24gPC9wPg0KPHA+SW1wb3J0ZWQ8L3A+DQo8cD5NYWNoaW5lIHdhc2g8L3A+DQo8cD5TaG9ydC1zbGVldmUgY2xhc3NpYyB0ZWUgZmVhdHVyaW5nIHJpYmJlZCBjcmV3IG5lY2tsaW5lPC9wPg0KPHA+UHJlLXNocnVuayBmb3IgZml0IDwvcD4NCjxwPjQuNSBvdW5jZSByaW5nLXNwdW4gY290dG9uPC9wPg==]]></fileData>
+        <fileData><![CDATA[PHA+MTAwJSBjb3R0b24gPC9wPg0KPHA+SW1wb3J0ZWQ8L3A+DQo8cD5NYWNoaW5lIHdhc2g8L3A+DQo8cD5TaG9ydC1zbGVldmUg Y2xhc3NpYyB0ZWUgZmVhdHVyaW5nIHJpYmJlZCBjcmV3IG5lY2tsaW5lPC9wPg0KPHA+UHJlLXNocnVuayBmb3IgZml0IDwvcD4NCjxwPjQuNSBvdW5jZSByaW5nLXNwdW4gY290dG9uPC9wPg==]]></fileData>
     </moqui.resource.DbResourceFile>
     <!-- call a service to generate variants -->
     <mantle.product.ProductServices.createVariantProducts productId="DEMO_TS_W" productTypeEnumId="PtAsset"
             assetTypeEnumId="AstTpInventory" assetClassEnumId="AsClsInventoryFin" copyCategoryMembers="false"/>
+    <mantle.product.StoreServices.generateUrlSlugFromProductName productId="DEMO_TS_W"/>
 
     <!-- Hoodie -->
     <mantle.product.Product productId="DEMO_HOOD" productTypeEnumId="PtAsset" assetTypeEnumId="AstTpInventory" assetClassEnumId="AsClsInventoryFin"
@@ -144,6 +164,7 @@ along with this software (see the LICENSE.md file). If not, see
     <moqui.resource.DbResourceFile resourceId="DEMO_HOOD_DL" rootVersionName="01" mimeType="text/html" versionName="01">
         <fileData><![CDATA[PHA+NTAlIGNvdHRvbiAvIDUwJSBQb2x5ZXN0ZXI8L3A+DQo8cD5JbXBvcnRlZDwvcD4NCjxwPlppcHBlciBjbG9zdXJlPC9wPg0KPHA+TWFjaGluZSB3YXNoPC9wPg0KPHA+WmlwLXVwIGhvb2RlZCBzd2VhdHNoaXJ0IGluIDcuOC1vdW5jZSBmbGVlY2UgbWFkZSB3aXRoIHVwIHRvIDUlIHBvbHllc3RlciBjcmVhdGVkIGZyb20gcmVjeWNsZWQgcGxhc3RpYy48L3A+DQo8cD5QaWxsLXJlc2lzdGFudCBmYWJyaWMgd2l0aCBoaWdoLXN0aXRjaCBkZW5zaXR5IGZvciBkdXJhYmlsaXR5LiA8L3A+DQo8cD5SaWJiZWQgd2Fpc3RiYW5kIGFuZCBjdWZmcywgc3BsaXQga2FuZ2Fyb28gcG9ja2V0LjwvcD4=]]></fileData>
     </moqui.resource.DbResourceFile>
+    <mantle.product.StoreServices.generateUrlSlugFromProductName productId="DEMO_HOOD"/>
 
     <!-- Baseball Cap -->
     <mantle.product.Product productId="DEMO_BCAP" productTypeEnumId="PtAsset" assetTypeEnumId="AstTpInventory" assetClassEnumId="AsClsInventoryFin"
@@ -180,6 +201,7 @@ along with this software (see the LICENSE.md file). If not, see
     <moqui.resource.DbResourceFile resourceId="DEMO_BCAP_DL" rootVersionName="01" mimeType="text/html" versionName="01">
         <fileData><![CDATA[PHA+MTAwJSBjb3R0b24gcGlnbWVudCBkeWVkIHN0b25lLXdhc2hlZCBiYXNlYmFsbCBjYXA8L3A+DQo8cD5MaWdodHdlaWdodDogR3JlYXQgZm9yIGFsbCBzZWFzb25zIHdlYXI8L3A+DQo8cD5BZGp1c3RhYmxlIHN0cmFwLWJhY2sgd2l0aiBzdHVyZHkgbWV0YWwgY2xhc3AgZml0cyBhbGwgc2l6ZXMgZnJvbSBYUyB0byBYWFhMPC9wPg0KPHA+VW5pc2V4PC9wPg==]]></fileData>
     </moqui.resource.DbResourceFile>
+    <mantle.product.StoreServices.generateUrlSlugFromProductName productId="DEMO_BCAP"/>
 
     <!-- USB Drive -->
     <mantle.product.Product productId="DEMO_USB32G" productTypeEnumId="PtAsset" assetTypeEnumId="AstTpInventory" assetClassEnumId="AsClsInventoryFin"
@@ -220,6 +242,7 @@ along with this software (see the LICENSE.md file). If not, see
     <moqui.resource.DbResourceFile resourceId="DEMO_USB32G_DL" rootVersionName="01" mimeType="text/html" versionName="01">
         <fileData><![CDATA[PHA+SGlnaC1xdWFsaXR5IG1ldGFsIGNhc2luZyBmb3IgZHVyYWJpbGl0eTwvcD4NCg0KPHA+TkFORCBGbGFzaCBUZWNobm9sb2d5PC9wPg0KDQo8cD5XYXRlciBwcm9vZiwgU2hvY2sgcHJvb2YsIG1hZ25ldCBwcm9vZiwgdGVtcCBwcm9vZiBhbmQgWC1yYXkgcHJvb2Ygd2l0aCBhIDUteWVhcnMgd2FycmFudHk8L3A+DQoNCjxwPkhpZ2gtc3BlZWQgVVNCIDMuMCBmbGFzaCBkcml2ZSBmb3IgZmFzdCBkYXRhIHRyYW5zZmVyPC9wPg0KDQo8cD5PcGVyYXRpbmcgdGVtcGVyYXR1cmUgaXMgbWludXMgMTAgdG8gNzAgZGVncmVlIENlbHNpdXM8L3A+]]></fileData>
     </moqui.resource.DbResourceFile>
+    <mantle.product.StoreServices.generateUrlSlugFromProductName productId="DEMO_USB32G"/>
 
     <!-- Coffee Mug -->
     <mantle.product.Product productId="DEMO_CMUG" productTypeEnumId="PtAsset" assetTypeEnumId="AstTpInventory" assetClassEnumId="AsClsInventoryFin"
@@ -246,6 +269,7 @@ along with this software (see the LICENSE.md file). If not, see
     <moqui.resource.DbResourceFile resourceId="DEMO_CMUG_DL" rootVersionName="01" mimeType="text/html" versionName="01">
         <fileData><![CDATA[PHA+RHJpbmsgaW4gc3R5bGUgd2l0aCB0aGlzIGN1c3RvbSBwcmludGVkIGNlcmFtaWMgbXVnITwvcD4NCjxwPk11Z3MgcHJpbnRlZCBmcm9tIGhpZ2ggcmVzb2x1dGlvbiBpbWFnZXMgZm9yIHNoYXJwIHJlc3VsdHMuPC9wPg0KPHA+RGlzaHdhc2hlciBhbmQgbWljcm93YXZlIHNhZmUsIGltYWdlcyB3aWxsIG5vdCBmYWRlIG92ZXIgdGltZS48L3A+DQo8cD48L3A+]]></fileData>
     </moqui.resource.DbResourceFile>
+    <mantle.product.StoreServices.generateUrlSlugFromProductName productId="DEMO_CMUG"/>
 
     <!-- ==================== Wiki Pages (content) ==================== -->
 

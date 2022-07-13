@@ -28,6 +28,7 @@ along with this software (see the LICENSE.md file). If not, see
         </in-parameters>
         <out-parameters>
             <parameter name="productStoreId"/>
+            <parameter name="productStore"/>
         </out-parameters>
         <actions>
             <set field="productStoreId" default-value="POPC_DEFAULT"/>
@@ -35,6 +36,7 @@ along with this software (see the LICENSE.md file). If not, see
             <if condition="!sessionAttributes.productStoreId &amp;&amp; productStoreId">
                 <set field="sessionAttributes.productStoreId" from="productStoreId"/>
             </if>
+            <entity-find-one entity-name="mantle.product.store.ProductStore" value-field="productStore" cache="true"/>
 
             <return/>
 
@@ -66,6 +68,32 @@ along with this software (see the LICENSE.md file). If not, see
             <set field="productStoreId" from="ec.web.sessionAttributes.productStoreId"/>
         </actions>
     </service>
+    <service verb="generate" noun="ImageContentUrl">
+        <in-parameters>
+            <parameter name="contents" type="List"/>
+            <parameter name="productContentId"/>
+            <parameter name="productContentTypeEnumId"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="imageContentUrl"/>
+        </out-parameters>
+        <actions>
+            <if condition="!productContentId &amp;&amp; productContentTypeEnumId"><then>
+                <set field="productContentId" from="contents?.find{it.productContentTypeEnumId == productContentTypeEnumId}?.productContentId"/>
+            </then><else>
+                <set field="productContentId" from="contents?.find{it.productContentTypeEnumId == 'PcntImageLarge'}?.productContentId ?: contents?.find{it.productContentTypeEnumId == 'PcntImageMedium'}?.productContentId ?: contents?.find{it.productContentTypeEnumId == 'PcntImageSmall'}?.productContentId ?: contents?.find{it.productContentTypeEnumId == 'PcntImageOriginal'}?.productContentId"/>
+            </else></if>
+            <log level="warn" message="productContentId ${productContentId}"/>
+
+            <if condition="ec.web.requestUrl.lastIndexOf('?')"><then>
+                <set field="url" value="${ec.web.requestUrl.minus(ec.web.request.requestURI).substring(0, ec.web.requestUrl.minus(ec.web.request.requestURI).lastIndexOf('?') )}"/>
+            </then><else>
+                <set field="url" value="${ec.web.requestUrl}"/>
+            </else></if>
+            <set field="imageContentUrl" value="${url}/store/content/productImage/${productContentId}"/>
+            <log level="warn" message="imageContentUrl ${imageContentUrl}"/>
+        </actions>
+    </service>
 
     <service verb="get" noun="LightBootstrap">
         <in-parameters>
@@ -79,30 +107,96 @@ along with this software (see the LICENSE.md file). If not, see
         <actions>
             <service-call name="popstore.PrestashopServices.get#ProductStoreId" in-map="[requestHostName:requestHostName]" out-map="context"/>
 
-            <service-call name="popstore.StoreServices.get#StoreInfo" in-map="[productStoreId:productStoreId]" out-map="storeInfo"/>
-            <set field="productStore" from="storeInfo.productStore"/>
-            <set field="wikiSpaceId" from="productStore?.wikiSpaceId"/>
-
-            <!-- lookup configured browse root category from storeInfo -->
-            <set field="browseRootCategory" from="storeInfo.categoryByType.PsctBrowseRoot"/>
-            <set field="browseRootCategoryId" from="browseRootCategory?.productCategoryId"/>
-            <!-- get browseRootCategoryInfo for subCategoryList used in header, etc -->
-            <if condition="browseRootCategoryId">
-                <service-call name="popstore.ProductServices.get#CategoryInfo" out-map="browseRootCategoryInfo"
-                              in-map="[productCategoryId:browseRootCategoryId]"/>
-            </if>
+            <set field="dataDocument" from="productStore?.storeDataDocuments?.find{it.typeEnumId == 'PsdtCategory'}?.dataDocument"/>
+            <set field="queryString" value="*"/>
+            <set field="storeCategoryTypeEnumId" value="PsctBrowseRoot"/>
+            <script><![CDATA[
+                nestedQueryMap = [parents:"""{
+                        "bool":{
+                            "must":[
+                                {"range":
+                                    {"parents.fromDate":{"lte":${ec.user.nowTimestamp.time}} }
+                                },
+                                {"bool":
+                                    {"should":[
+                                        {"range":
+                                            {"parents.thruDate":{"gte":${ec.user.nowTimestamp.time}} }
+                                        },
+                                        {"bool":
+                                            {"must_not":{"exists":{"field":"parents.thruDate"}}}
+                                        }
+                                    ]}
+                                },
+                                {
+									"nested": {
+										"path": "parents.storeCategories",
+										"query": {
+											"bool": {
+												"must": [
+													{
+														"match": {
+															"parents.storeCategories.productStoreId": "${productStoreId}"
+														}
+													},
+													{
+														"match": {
+															"parents.storeCategories.storeCategoryTypeEnumId": "${storeCategoryTypeEnumId}"
+														}
+													},
+													{
+														"range": {
+															"parents.storeCategories.fromDate": {
+																"lte": ${ec.user.nowTimestamp.time}
+															}
+														}
+													},
+													{
+														"bool": {
+															"should": [
+																{
+																	"range": {
+																		"parents.storeCategories.thruDate": {
+																			"gte": ${ec.user.nowTimestamp.time}
+																		}
+																	}
+																},
+																{
+																	"bool": {
+																		"must_not": {
+																			"exists": {
+																				"field": "parents.storeCategories.thruDate"
+																			}
+																		}
+																	}
+																}
+															]
+														}
+													}
+												]
+											}
+										}
+									}
+                                }
+                            ]
+                        }
+                    }"""]
+                ]]></script>
+            <entity-find-one entity-name="moqui.entity.document.DataDocument" value-field="dataDocument" cache="true">
+                <field-map field-name="dataDocumentId" value="PopcCategory"/></entity-find-one>
+            <service-call name="org.moqui.search.SearchServices.search#DataDocuments" out-map="searchOut"
+                          in-map="[queryString:queryString, nestedQueryMap:nestedQueryMap, indexName:dataDocument.indexName,
+                        documentType:dataDocument.dataDocumentId, pageIndex:pageIndex, pageSize:pageSize, flattenDocument:false]"/>
 
             <!-- Start Prestashop Stuff -->
             <set field="code" from="200"/>
 
-<!--            <log level="warn" message="browseRootCategoryInfo?.subCategoryList ${browseRootCategoryInfo?.subCategoryList}"/>-->
-
             <set field="psdata" from="[ menuItems:[] ]"/>
-            <iterate list="browseRootCategoryInfo?.subCategoryList" entry="category">
-                <script>psdata.menuItems.add([
-                        id: category?.productCategoryId,
-                        slug: category?.productCategoryId,
-                        label: category?.categoryName
+            <iterate list="searchOut?.documentList" entry="category">
+<!--                <log level="warn" message="category ${category}"/>-->
+                    <script>psdata.menuItems.add([
+                            id: category?.productCategoryId,
+                            slug: category?.identifications?.find{it.identTypeEnumId == 'PcitUrlSlug'}?.idValue ?: category?.productCategoryId,
+                            label: category?.categoryName
                     ]);</script>
             </iterate>
 
@@ -120,31 +214,121 @@ along with this software (see the LICENSE.md file). If not, see
             <service-call name="popstore.PrestashopServices.get#ProductStoreId" in-map="[requestHostName:requestHostName]" out-map="context"/>
 
             <!-- Best Selling (Featured) Category -->
-            <entity-find entity-name="mantle.product.store.ProductStoreCategory" list="featPscList" cache="true">
-                <date-filter/><econdition field-name="productStoreId"/>
-                <econdition field-name="storeCategoryTypeEnumId" value="PsctFeatured"/>
-            </entity-find>
-            <if condition="featPscList">
-                <service-call name="popstore.ProductServices.get#CategoryProducts" out-map="featCatProdOut"
-                              in-map="[productCategoryId:featPscList[0].productCategoryId]"/>
-                <set field="featureProductList" from="featCatProdOut.productList"/>
-            </if>
+            <set field="dataDocument" from="productStore?.storeDataDocuments?.find{it.typeEnumId == 'PsdtProduct'}?.dataDocument"/>
+            <set field="queryString" value="*"/>
+            <set field="storeCategoryTypeEnumId" value="PsctFeatured"/>
+            <script><![CDATA[
+                nestedQueryMap = [categories:"""{
+							"bool": {
+								"must": [
+									{
+										"range": {
+											"categories.categoryFromDate": {
+												"lte": ${ec.user.nowTimestamp.time}
+											}
+										}
+									},
+									{
+										"bool": {
+											"should": [
+												{
+													"range": {
+														"categories.categoryThruDate": {
+															"gte": ${ec.user.nowTimestamp.time}
+														}
+													}
+												},
+												{
+													"bool": {
+														"must_not": {
+															"exists": {
+																"field": "categories.categoryThruDate"
+															}
+														}
+													}
+												}
+											]
+										}
+									},
+									{
+										"nested": {
+											"path": "categories.stores",
+											"query": {
+												"bool": {
+													"must": [
+														{
+															"match": {
+																"categories.stores.productStoreId": "${productStoreId}"
+															}
+														},
+														{
+															"match": {
+																"categories.stores.storeCategoryTypeEnumId": "${storeCategoryTypeEnumId}"
+															}
+														},
+														{
+															"range": {
+																"categories.stores.storeCategoryFromDate": {
+																	"lte": ${ec.user.nowTimestamp.time}
+																}
+															}
+														},
+														{
+															"bool": {
+																"should": [
+																	{
+																		"range": {
+																			"categories.stores.storeCategoryThruDate": {
+																				"gte": ${ec.user.nowTimestamp.time}
+																			}
+																		}
+																	},
+																	{
+																		"bool": {
+																			"must_not": {
+																				"exists": {
+																					"field": "categories.stores.storeCategoryThruDate"
+																				}
+																			}
+																		}
+																	}
+																]
+															}
+														}
+													]
+												}
+											}
+										}
+									}
+								]
+							}
+                    }"""]
+                ]]></script>
+            <service-call name="org.moqui.search.SearchServices.search#DataDocuments" out-map="searchOut"
+                          in-map="[queryString:queryString, nestedQueryMap:nestedQueryMap, indexName:dataDocument?.indexName,
+                        documentType:dataDocument.dataDocumentId, pageIndex:pageIndex, pageSize:pageSize, flattenDocument:false]"/>
+<!--            <log level="warn" message="searchOut ${searchOut}"/>-->
 
             <!-- Start Prestashop Stuff -->
 <!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopFeaturedProducts.json',false))"/>-->
             <set field="code" from="200"/>
 
             <set field="psdata" from="[]"/>
-            <iterate list="featureProductList" entry="product">
+            <iterate list="searchOut?.documentList" entry="product">
+<!--                <log level="warn" message="product ${product}"/>-->
+<!--                <if condition="product.categories"-->
+
+                <!-- TODO: Get prices from mantle.product.PriceServices.get#ProductPrice to the Product DataDocument with productStoreId, vendorPartyId, and customerPartyId parameters exported -->
                 <script>psdata.add([
                         id_product: product?.productId,
-                        name: product?.productName,
-                        link_rewrite: product?.productId,
-                        regular_price_amount: product?.listPrice,
-                        price_amount: product?.price,
-                        cover: [url: "${ec.web.requestUrl.minus(ec.web.request.requestURI)}/store/content/productImage/${product?.mediumImageInfo?.productContentId ?: product?.smallImageInfo?.productContentId}"]
-                    ]);</script>
+                        name: product?.name,
+                        link_rewrite: product?.otherIdentifications?.find{it.otherIdentProductIdTypeEnumId == 'PidtUrlSlug'}?.otherIdentIdValue,
+                        regular_price_amount: product?.prices?.find{it.priceTypeEnumId == 'PptList'}?.price ?: product?.prices?.find{it.priceTypeEnumId == 'PptCurrent'}?.price,
+                        price_amount: product?.prices?.find{it.priceTypeEnumId == 'PptCurrent'}?.price,
+                        cover: [url: "${ec.web.requestUrl.minus(ec.web.request.requestURI)}/store/content/productImage/${product?.contents?.find{it.productContentTypeEnumId == 'PcntImageLarge'}?.productContentId ?: product?.contents?.find{it.productContentTypeEnumId == 'PcntImageMedium'}?.productContentId ?: product?.contents?.find{it.productContentTypeEnumId == 'PcntImageSmall'}?.productContentId ?: product?.contents?.find{it.productContentTypeEnumId == 'PcntImageOriginal'}?.productContentId}"]
+                ]);</script>
             </iterate>
+<!--            <log level="warn" message="psdata ${psdata}"/>-->
 
             <log level="warn" message="get#FeaturedProducts"/>
 <!--            <log level="warn" message="FeaturedProducts context ${context.toString()}"/>-->
@@ -171,8 +355,12 @@ along with this software (see the LICENSE.md file). If not, see
 <!--            <log level="warn" message="q ${q.split('-|/').minus(q.split('/').collect{it.split('-')}.collect{it[0]})}"/>-->
 
             <service-call name="popstore.PrestashopServices.get#ProductStoreId" in-map="[requestHostName:requestHostName]" out-map="context"/>
+            <service-call name="popstore.PrestashopServices.get#LightBootstrap" out-map="lightBootstrapMap"/>
 
-            <set field="categoryId" from="slug"/>
+<!--            <log level="warn" message="lightBootstrapMap ${lightBootstrapMap}"/>-->
+<!--            <log level="warn" message="lightBootstrapMap?.psdata?.menuItems?.find{it.slug == slug}?.id ${lightBootstrapMap?.psdata?.menuItems?.find{it.slug == slug}?.id}"/>-->
+            <set field="categoryId" from="lightBootstrapMap?.psdata?.menuItems?.find{it.slug == slug}?.id ?: slug"/>
+<!--            <log level="warn" message="categoryId ${categoryId}"/>-->
             <service-call name="popstore.ProductServices.get#CategoryProducts" out-map="products"
                           in-map="[productCategoryId:categoryId, orderBy: orderBy, pageIndex:page?page-1: '0', pageSize:12]"/>
 
@@ -218,7 +406,7 @@ along with this software (see the LICENSE.md file). If not, see
             </if>
 
             <!-- Start Prestashop Stuff -->
-            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopCategoryProducts.json',false))"/>
+<!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopCategoryProducts.json',false))"/>-->
             <set field="code" from="200"/>
             <script>
                 def moquiToPrestashopCategory(category) {
@@ -295,10 +483,20 @@ along with this software (see the LICENSE.md file). If not, see
 
             <service-call name="popstore.PrestashopServices.get#ProductStoreId" in-map="[requestHostName:requestHostName]" out-map="context"/>
 
+<!--            <set field="dataDocument" from="productStore?.storeDataDocuments?.find{it.typeEnumId == 'PsdtProduct'}?.dataDocument"/>-->
             <set field="productId" from="product_id"/>
+<!--            <set field="queryString" from="'productId:'+productId"/>-->
+<!--            <set field="storeCategoryTypeEnumId" value="PsctFeatured"/>-->
+<!--            <service-call name="org.moqui.search.SearchServices.search#DataDocuments" out-map="searchOut"-->
+<!--                          in-map="[queryString:queryString, nestedQueryMap:nestedQueryMap, indexName:dataDocument?.indexName,-->
+<!--                        documentType:dataDocument.dataDocumentId, pageIndex:pageIndex, pageSize:pageSize, flattenDocument:false]"/>-->
+
+<!--            <log level="warn" message="searchOut ${searchOut?.documentList[0]}"/>-->
+<!--            <set field="product" from="searchOut?.documentList[0]"/>-->
+
             <service-call name="popstore.ProductServices.get#ProductInfo" out-map="product" in-map="[productId:productId]"/>
 
-<!--            <log level="warn" message="product ${product.toString()}"/>-->
+            <!--            <log level="warn" message="product ${product.toString()}"/>-->
 
             <entity-find entity-name="mantle.product.feature.ProductFeatureAndAppl" list="pfaaList">
                 <date-filter/>
@@ -307,7 +505,7 @@ along with this software (see the LICENSE.md file). If not, see
             </entity-find>
 
             <!-- Start Prestashop Stuff -->
-<!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopProductDetail.json',false))"/>-->
+            <!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopProductDetail.json',false))"/>-->
 
             <set field="code" from="200"/>
             <set field="imageUrl" value="${ec.web.requestUrl.minus(ec.web.request.requestURI).substring(0, ec.web.requestUrl.minus(ec.web.request.requestURI).lastIndexOf('?'))}/store/content/productImage/${product?.contentList?.getFirst()?.productContentId}"/>
@@ -340,12 +538,11 @@ along with this software (see the LICENSE.md file). If not, see
                         name: pfaaList?.find{it.productFeatureId == attribute.key}?.description,
                         selected: groupMap?.find{it.key == group.key}?.value?.contains(attribute.key) ?: false
                         ]"/>
-<!--                    <log level="warn" message="groupMap?.find{it.key == group.key}?.value?.contains(attribute.key) ${groupMap?.find{it.key == group.key}?.value?.contains(attribute.key)}"/>-->
+                    <!--                    <log level="warn" message="groupMap?.find{it.key == group.key}?.value?.contains(attribute.key) ${groupMap?.find{it.key == group.key}?.value?.contains(attribute.key)}"/>-->
                 </iterate>
             </iterate>
-<!--            <log level="warn" message="psdata ${psdata}"/>-->
-
-<!--            <set field="psdata" from="data?.psdata"/>-->
+                        <log level="warn" message="psdata ${psdata}"/>
+            <!--            <set field="psdata" from="data?.psdata"/>-->
             <log level="warn" message="get#ProductDetail"/>
         </actions>
     </service>
@@ -680,7 +877,7 @@ along with this software (see the LICENSE.md file). If not, see
 
             <log level="warn" message="context ${context.toString()}"/>
 
-            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopLogin.json',false))"/>
+<!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopLogin.json',false))"/>-->
 
             <!-- Start Prestashop Stuff -->
             <set field="code" from="200"/>

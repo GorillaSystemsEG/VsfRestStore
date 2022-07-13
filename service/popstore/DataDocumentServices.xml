@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+This software is in the public domain under CC0 1.0 Universal plus a
+Grant of Patent License.
+
+To the extent possible under law, the author(s) have dedicated all
+copyright and related and neighboring rights to this software to the
+public domain worldwide. This software is distributed without any
+warranty.
+
+You should have received a copy of the CC0 Public Domain Dedication
+along with this software (see the LICENSE.md file). If not, see
+<http://creativecommons.org/publicdomain/zero/1.0/>.
+-->
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <service verb="get" noun="ProductManualDocumentData" authenticate="anonymous-view" no-remember-parameters="true">
+        <implements service="org.moqui.EntityServices.add#ManualDocumentData"/>
+        <actions>
+            <set field="productId" from="document.productId"/>
+            <entity-find entity-name="mantle.product.ProductContent" list="productContentList">
+                <date-filter/><econdition field-name="productId"/></entity-find>
+
+            <set field="contents" from="[]"/>
+            <iterate list="productContentList" entry="productContentEntity">
+                <set field="productContent" from="productContentEntity?.getMap()"/>
+                <set field="contentRef" from="ec.resource.getLocationReference(productContent.contentLocation)"/>
+                <if condition="contentRef != null &amp;&amp; contentRef.isText()">
+                    <script>productContent.put('contentText',contentRef.getText())</script>
+                </if>
+                <script>contents.add(productContent)</script>
+            </iterate>
+
+            <set field="document.contents" from="contents"/>
+        </actions>
+    </service>
+
+    <service verb="get" noun="CategoryInfoRecursive">
+        <in-parameters>
+            <parameter name="productCategoryId"/>
+            <parameter name="relatedList" default="['storeCategories','contents','featureGroups','products','identifications']" type="Map"/>
+            <!--            <parameter name="childrenName" default-value="children"/>-->
+            <parameter name="parentName" default-value="parents"/>
+        </in-parameters>
+        <out-parameters>
+            <auto-parameters entity-name="mantle.product.category.ProductCategory"/>
+            <parameter name="storeCategories" type="List" default="[]"/>
+            <parameter name="contents" type="List" default="[]"/>
+            <parameter name="featureGroups" type="List" default="[]"/>
+            <parameter name="products" type="List" default="[]"/>
+            <!--            <parameter name="children" type="List" default="[]"/>-->
+            <parameter name="parents" type="List" default="[]"/>
+            <parameter name="identifications" type="List" default="[]"/>
+        </out-parameters>
+        <actions>
+            <set field="outMap" from="[:]"/>
+            <entity-find-one entity-name="mantle.product.category.ProductCategory" value-field="productCategory" auto-field-map="[productCategoryId:productCategoryId]"/>
+            <script>outMap.putAll(productCategory.getMap())</script>
+            <iterate list="relatedList" entry="relationshipName">
+                <entity-find-related value-field="productCategory" relationship-name="${relationshipName}" list="outMapRelationship"/>
+                <script>outMap[relationshipName]=outMapRelationship*.findAll{ it.value!=null }</script>
+            </iterate>
+
+            <!--            <set field="outMap[childrenName]" from="[]"/>-->
+            <!--            <iterate list="productCategory[childrenName]" entry="child">-->
+            <!--                <service-call name="popstore.DataDocumentServices.get#CategoryInfoRecursive" in-map="[productCategoryId:child.productCategoryId,categoryInfoList:categoryInfoList]" out-map="childCategory"/>-->
+            <!--&lt;!&ndash;                <log level="warn" message="childCategory.children.productCategoryId ${childCategory.children.productCategoryId}"/>&ndash;&gt;-->
+            <!--                <set field="childOutMap" from="[:]"/>-->
+            <!--                <script>childOutMap.putAll((Map) child)</script>-->
+            <!--                <script>childOutMap.putAll((Map) childCategory)</script>-->
+            <!--&lt;!&ndash;                <log level="warn" message="childOutMap ${childOutMap.identifications}"/>&ndash;&gt;-->
+            <!--                <script>outMap[childrenName].add(childOutMap.clone().findAll{ it.value!=null })</script>-->
+            <!--            </iterate>-->
+
+            <set field="outMap[parentName]" from="[]"/>
+            <!--            <set field="outMap[parentName]" from="productCategory[parentName]"/>-->
+            <iterate list="productCategory[parentName]" entry="parent">
+                <!--                <log level="warn" message="${parent.productCategoryId} -> ${parent.parentProductCategoryId} -> ${outMap[childrenName]?.productCategoryId?.contains(parent.parentProductCategoryId)}"/>-->
+                <!--                <log level="warn" message="outMap[childrenName]?.productCategoryId ${outMap[childrenName]?.productCategoryId}"/>-->
+                <!--                <set field="parentCategory" from="outMap[childrenName]?.find{it.productCategoryId == parent.parentProductCategoryId}?.clone()"/>-->
+                <!--                <log level="warn" message="parentCategory?.productCategoryId ${parentCategory?.productCategoryId}"/>-->
+                <!--                <if condition="!parentCategory">-->
+                <!--                    <service-call name="popstore.DataDocumentServices.get#CategoryInfoRecursive" in-map="[productCategoryId:parent.parentProductCategoryId]" out-map="parentCategory"/>-->
+                <!--                </if>-->
+                <service-call name="popstore.DataDocumentServices.get#CategoryInfoRecursive" in-map="[productCategoryId:parent.parentProductCategoryId]" out-map="parentCategory"/>
+
+                <!--                <log level="warn" message="parentCategory.parents.parentProductCategoryId ${parentCategory.parents.parentProductCategoryId}"/>-->
+                <set field="parentOutMap" from="[:]"/>
+                <script>parentOutMap.putAll((Map) parent)</script>
+                <script>parentOutMap.putAll((Map) parentCategory)</script>
+                <!--                <log level="warn" message="parentOutMap ${parentOutMap.identifications}"/>-->
+                <script>outMap[parentName].add(parentOutMap.clone().findAll{ it.value!=null })</script>
+            </iterate>
+
+            <script>context.putAll(outMap)</script>
+            <!--            <log level="warn" message="outMap ${outMap.identifications.toString()}"/>-->
+
+        </actions>
+    </service>
+    <service verb="get" noun="CategoryManualDocumentData" authenticate="anonymous-view" no-remember-parameters="true">
+        <implements service="org.moqui.EntityServices.add#ManualDocumentData"/>
+        <in-parameters>
+        </in-parameters>
+        <actions>
+            <!--            <return/>-->
+            <service-call name="popstore.DataDocumentServices.get#CategoryInfoRecursive" in-map="[productCategoryId:document.productCategoryId]" out-map="document"/>
+            <!--            <log level="warn" message="${document.productCategoryId} ${document.children.productCategoryId}"/>-->
+        </actions>
+    </service>
+
+</services>
+
+
+
