@@ -133,6 +133,13 @@ along with this software (see the LICENSE.md file). If not, see
     <!-- call a service to generate variants -->
     <mantle.product.ProductServices.createVariantProducts productId="DEMO_TS_W" productTypeEnumId="PtAsset"
             assetTypeEnumId="AstTpInventory" assetClassEnumId="AsClsInventoryFin" copyCategoryMembers="false"/>
+    <mantle.product.asset.Asset productId="DEMO_TS_W_BL_LG" assetId="DEMO_TS_W_BL_LG2" assetTypeEnumId="AstTpInventory" classEnumId="AsClsInventoryFin"
+                                statusId="AstAvailable" facilityId="ZIRET_WH" locationSeqId="01010102" ownerPartyId="ORG_ZIZI_RETAIL"
+                                hasQuantity="Y" quantityOnHandTotal="50" availableToPromiseTotal="50"
+                                acquireCost="7.50" acquireCostUomId="USD" receivedDate="1265184000000">
+        <mantle.product.asset.AssetDetail productId="DEMO_TS_W_BL_LG"  assetDetailId="DEMO_TS_W_BL_LG2" effectiveDate="1265184000000"
+                                          quantityOnHandDiff="100" availableToPromiseDiff="100"/>
+    </mantle.product.asset.Asset>
     <mantle.product.StoreServices.generateUrlSlugFromProductName productId="DEMO_TS_W"/>
 
     <!-- Hoodie -->

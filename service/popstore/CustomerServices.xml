@@ -179,7 +179,8 @@ along with this software (see the LICENSE.md file). If not, see
 
     <service verb="reset" noun="Password" authenticate="anonymous-all">
         <in-parameters>
-            <parameter name="username"/>
+            <parameter name="email"/>
+            <parameter name="username" default="email"/>
         </in-parameters>
         <out-parameters>
             <parameter name="response"/>

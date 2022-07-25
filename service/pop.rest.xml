@@ -53,16 +53,16 @@ along with this software (see the LICENSE.md file). If not, see
     <resource name="login" require-authentication="anonymous-view">
         <method type="post"><service name="popstore.PrestashopServices.login#Customer"/></method>
     </resource>
-    <resource name="logout" require-authentication="anonymous-view">
+    <resource name="logout">
         <method type="get"><service name="popstore.PrestashopServices.logout#Customer"/></method>
     </resource>
-    <resource name="accountInfo"  require-authentication="anonymous-view">
+    <resource name="accountInfo">
         <method type="get"><service name="popstore.PrestashopServices.get#AccountInfo"/></method>
     </resource>
     <resource name="addressform" require-authentication="anonymous-view">
         <method type="get"><service name="popstore.PrestashopServices.get#AddressForm"/></method>
     </resource>
-    <resource name="accountedit" require-authentication="anonymous-view">
+    <resource name="accountedit">
         <method type="post"><service name="popstore.PrestashopServices.post#AccountEdit"/></method>
     </resource>
     <resource name="orderhistory" require-authentication="anonymous-view">
@@ -110,8 +110,8 @@ along with this software (see the LICENSE.md file). If not, see
 <!--        <method type="get"><service name="popstore.CustomerServices.logout#Customer"/></method></resource>-->
 <!--    <resource name="register" require-authentication="anonymous-all">-->
 <!--        <method type="post"><service name="popstore.CustomerServices.register#Customer"/></method></resource>-->
-<!--    <resource name="resetPassword" require-authentication="anonymous-all">-->
-<!--        <method type="post"><service name="popstore.CustomerServices.reset#Password"/></method></resource>-->
+    <resource name="resetPassword" require-authentication="anonymous-all">
+        <method type="post"><service name="popstore.CustomerServices.reset#Password"/></method></resource>
 
     <!-- Geo, Locale, TimeZone -->
 

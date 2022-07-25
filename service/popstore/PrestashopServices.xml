@@ -325,7 +325,8 @@ along with this software (see the LICENSE.md file). If not, see
                         link_rewrite: product?.otherIdentifications?.find{it.otherIdentProductIdTypeEnumId == 'PidtUrlSlug'}?.otherIdentIdValue,
                         regular_price_amount: product?.prices?.find{it.priceTypeEnumId == 'PptList'}?.price ?: product?.prices?.find{it.priceTypeEnumId == 'PptCurrent'}?.price,
                         price_amount: product?.prices?.find{it.priceTypeEnumId == 'PptCurrent'}?.price,
-                        cover: [url: "${ec.web.requestUrl.minus(ec.web.request.requestURI)}/store/content/productImage/${product?.contents?.find{it.productContentTypeEnumId == 'PcntImageLarge'}?.productContentId ?: product?.contents?.find{it.productContentTypeEnumId == 'PcntImageMedium'}?.productContentId ?: product?.contents?.find{it.productContentTypeEnumId == 'PcntImageSmall'}?.productContentId ?: product?.contents?.find{it.productContentTypeEnumId == 'PcntImageOriginal'}?.productContentId}"]
+                        cover: [url: "${ec.web.requestUrl.minus(ec.web.request.requestURI)}/store/content/productImage/${product?.contents?.find{it.productContentTypeEnumId == 'PcntImageLarge'}?.productContentId ?: product?.contents?.find{it.productContentTypeEnumId == 'PcntImageMedium'}?.productContentId ?: product?.contents?.find{it.productContentTypeEnumId == 'PcntImageSmall'}?.productContentId ?: product?.contents?.find{it.productContentTypeEnumId == 'PcntImageOriginal'}?.productContentId}"],
+                        is_virtual: product.productTypeEnumId=='PtVirtual'
                 ]);</script>
             </iterate>
 <!--            <log level="warn" message="psdata ${psdata}"/>-->
@@ -421,14 +422,16 @@ along with this software (see the LICENSE.md file). If not, see
             </script>
             <set field="psdata" from="[ products:[], pagination:[current_page: products?.productListPageIndex+1,total_items: products?.productListCount,pages_count: products?.productListPageMaxIndex+1], facets:[], categories:moquiToPrestashopCategory(browseRootCategoryInfo) ]"/>
             <iterate list="productsFiltered" entry="product">
+                <log level="warn" message="product ${product}"/>
                 <script>psdata.products.add([
                     id_product: product?.productId,
                     name: product?.productName,
                     link_rewrite: product?.productId,
                     regular_price_amount: product?.listPrice,
                     price_amount: product?.price,
-                    cover: [url: "${ec.web.requestUrl.minus(ec.web.request.requestURI).substring(0, ec.web.requestUrl.minus(ec.web.request.requestURI).lastIndexOf('?'))}/store/content/productImage/${product?.mediumImageInfo?.productContentId ?: product?.smallImageInfo?.productContentId}"]
-                    ]);</script>
+                    cover: [url: "${ec.web.requestUrl.minus(ec.web.request.requestURI).substring(0, ec.web.requestUrl.minus(ec.web.request.requestURI).lastIndexOf('?'))}/store/content/productImage/${product?.mediumImageInfo?.productContentId ?: product?.smallImageInfo?.productContentId}"],
+                    is_virtual: product?.isVirtual
+                ]);</script>
             </iterate>
             <iterate list="pfaaList" entry="productFeatureAndAppl">
                 <if condition="!psdata?.facets?.find{it.id == productFeatureAndAppl.productFeatureTypeEnumId}">
@@ -465,7 +468,7 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="image_type"/>
             <parameter name="refresh"/>
             <parameter name="id_customization"/>
-            <parameter name="group"/>
+            <parameter name="group" type="Map"/>
             <parameter name="with_all_images"/>
         </in-parameters>
         <out-parameters>
@@ -477,9 +480,12 @@ along with this software (see the LICENSE.md file). If not, see
 <!--            <log level="warn" message="product_id ${product_id}"/>-->
 <!--            <log level="warn" message="refresh ${refresh}"/>-->
 <!--            <log level="warn" message="groupMap ${groupMap}"/>-->
+<!--            <log level="warn" message="groupMap?.getClass() ${groupMap?.getClass()}"/>-->
 <!--            <log level="warn" message="ec.web.getRequestParameters() ${ec.web.getRequestParameters()}"/>-->
 
-            <if condition="group"><set field="groupMap" from="(Map) new groovy.json.JsonSlurper().parseText((String) group)"/></if>
+<!--            <if condition="group != null &amp;&amp; !group.isEmpty()"><set field="groupMap" type="NewMap" from="(Map) new groovy.json.JsonSlurper().parseText((String) group)"/></if>-->
+            <set field="groupMap" from="group"/>
+            <log level="warn" message="group ${group} group?.getClass() ${group?.getClass()}"/>
 
             <service-call name="popstore.PrestashopServices.get#ProductStoreId" in-map="[requestHostName:requestHostName]" out-map="context"/>
 
@@ -495,8 +501,27 @@ along with this software (see the LICENSE.md file). If not, see
 <!--            <set field="product" from="searchOut?.documentList[0]"/>-->
 
             <service-call name="popstore.ProductServices.get#ProductInfo" out-map="product" in-map="[productId:productId]"/>
+            <service-call name="popstore.ProductServices.get#ProductVariantsDisplayInfo" out-map="product" in-map="[productId:productId]"/>
 
-            <!--            <log level="warn" message="product ${product.toString()}"/>-->
+<!--            <log level="warn" message="listFeatures ${product.listFeatures.toString()}"/>-->
+<!--            <log level="warn" message="variantOptions ${product.variantOptions.toString()}"/>-->
+
+            <set field="variantOptionList" from="[]"/>
+            <!-- This list should only have one value, but it may have more if there are more than 3 attributes or duplicates of attributes -->
+            <set field="variantOptionSelectedList" from="[]"/>
+            <iterate list="product.variantOptions" entry="variantOption">
+                <script>variantOptionOut = variantOption.item</script>
+<!--                <log level="warn" message="variantOptionOut ${variantOptionOut}"/>-->
+<!--                <log level="warn" message="group[variantOptionOut.productFeatureTypeEnumId] == variantOptionOut.productFeatureId ${group[variantOptionOut.productFeatureTypeEnumId] == variantOptionOut.productFeatureId}"/>-->
+                <script>variantOptionList.add(variantOptionOut)</script>
+                <if condition="group &amp;&amp; group[variantOptionOut.productFeatureTypeEnumId] == variantOptionOut.productFeatureId">
+                    <set field="_variantOptionSelectedList" from="product.variantOptions.findAll{it.item.productId == variantOptionOut.productId
+                        &amp;&amp; it.item.productFeatureTypeEnumId != variantOptionOut.productFeatureTypeEnumId
+                        &amp;&amp; group[it.item.productFeatureTypeEnumId] == it.item.productFeatureId}?.item"/>
+                    <script>variantOptionSelectedList += _variantOptionSelectedList</script>
+                </if>
+            </iterate>
+            <log level="warn" message="variantOptionSelectedList ${variantOptionSelectedList.toString()}"/>
 
             <entity-find entity-name="mantle.product.feature.ProductFeatureAndAppl" list="pfaaList">
                 <date-filter/>
@@ -512,7 +537,8 @@ along with this software (see the LICENSE.md file). If not, see
             <set field="psdata" from="[
                 id_product: product?.productId,
                 name: product?.productName,
-                float_price: product?.price,
+                float_price: variantOptionSelectedList[0]?.prices?.listPrice ?: product?.listPrice,
+                discount_price: variantOptionSelectedList[0]?.prices?.price ?: product?.price,
                 images: [],
                 cover_image: imageUrl,
                 description: product?.descriptionLong,
@@ -520,9 +546,10 @@ along with this software (see the LICENSE.md file). If not, see
                 product_info: [],
                 manufacturer_name: 'Brand Manufacture Name',
                 category_name: 'Category Name',
+                is_virtual: product?.productTypeEnumId == 'PtVirtual',
                 groups: pfaaList?.productFeatureTypeEnumId?.groupBy{it}
                 ]"/>
-            <iterate list="product?.contentList" entry="content">
+            <iterate list="variantOptionSelectedList[0]?.contentList ?: product?.contentList" entry="content">
                 <if condition="content?.productContentId &amp;&amp; content?.productContentTypeEnumId?.contains('Image')">
                     <script>psdata.images.add(src: "${ec.web.requestUrl.minus(ec.web.request.requestURI).substring(0, ec.web.requestUrl.minus(ec.web.request.requestURI).lastIndexOf('?'))}/store/content/productImage/${content?.productContentId}")</script>
                 </if>
@@ -541,7 +568,9 @@ along with this software (see the LICENSE.md file). If not, see
                     <!--                    <log level="warn" message="groupMap?.find{it.key == group.key}?.value?.contains(attribute.key) ${groupMap?.find{it.key == group.key}?.value?.contains(attribute.key)}"/>-->
                 </iterate>
             </iterate>
-                        <log level="warn" message="psdata ${psdata}"/>
+
+            <log level="warn" message="psdata ${psdata}"/>
+
             <!--            <set field="psdata" from="data?.psdata"/>-->
             <log level="warn" message="get#ProductDetail"/>
         </actions>
@@ -734,6 +763,7 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="update"/>
             <parameter name="id_product"/>
             <parameter name="id_product_attribute"/>
+            <parameter name="attributes" type="Map"/>
             <parameter name="delete"/>
             <parameter name="op"/>
             <parameter name="action"/>
@@ -753,9 +783,34 @@ along with this software (see the LICENSE.md file). If not, see
 <!--            <log level="warn" message="op ${op}"/>-->
 <!--            <log level="warn" message="qty ${qty}"/>-->
 
+<!--            <if condition="attributes != null &amp;&amp; !attributes.isEmpty()"><set field="attributesMap" from="(Map) new groovy.json.JsonSlurper().parseText((String) attributes)"/></if>-->
+
             <service-call name="popstore.PrestashopServices.get#ProductStoreId" in-map="[requestHostName:requestHostName]" out-map="context"/>
 
             <set field="productId" from="id_product"/>
+            <set field="attributesMap" from="attributes"/>
+            <log level="warn" message="attributesMap ${attributesMap}"/>
+
+            <service-call name="popstore.ProductServices.get#ProductVariantsDisplayInfo" out-map="product" in-map="[productId:productId]"/>
+
+            <set field="variantOptionList" from="[]"/>
+            <!-- This list should only have one value, but it may have more if there are more than 3 attributes or duplicates of attributes -->
+            <set field="variantOptionSelectedList" from="[]"/>
+            <iterate list="product.variantOptions" entry="variantOption">
+                <script>variantOptionOut = variantOption.item</script>
+<!--                <log level="warn" message="variantOptionOut ${variantOptionOut}"/>-->
+<!--                <log level="warn" message="attributes[variantOptionOut.productFeatureTypeEnumId] == variantOptionOut.productFeatureId ${attributes[variantOptionOut.productFeatureTypeEnumId] == variantOptionOut.productFeatureId}"/>-->
+                <script>variantOptionList.add(variantOptionOut)</script>
+                <if condition="attributes &amp;&amp; attributes[variantOptionOut.productFeatureTypeEnumId] == variantOptionOut.productFeatureId">
+                    <set field="_variantOptionSelectedList" from="product.variantOptions.findAll{it.item.productId == variantOptionOut.productId
+                        &amp;&amp; it.item.productFeatureTypeEnumId != variantOptionOut.productFeatureTypeEnumId
+                        &amp;&amp; attributes[it.item.productFeatureTypeEnumId] == it.item.productFeatureId}?.item"/>
+                    <script>variantOptionSelectedList += _variantOptionSelectedList</script>
+                </if>
+            </iterate>
+<!--            <log level="warn" message="variantOptionSelectedList ${variantOptionSelectedList.toString()}"/>-->
+            <set field="productId" from="variantOptionSelectedList[0]?.productId ?: productId"/>
+
             <service-call name="popstore.CartServices.get#CartInfo" out-map="context"/>
 <!--            <log level="warn" message="deritem quantity ${orderItemList?.find{it.productId == productId}?.quantity}"/>-->
             <set field="quantity" from="qty ?: 0"/>
@@ -778,8 +833,6 @@ along with this software (see the LICENSE.md file). If not, see
                 </else-if>
                 <else>
                     <log level="warn" message="else"/>
-<!--                    <service-call name="popstore.CartServices.add#Product" out-map="addOut"-->
-<!--                                  in-map="[productId:productId, quantity:quantity, currencyUomId:currencyUomId, productStoreId: productStoreId]"/>-->
                 </else>
             </if>
 
@@ -789,6 +842,7 @@ along with this software (see the LICENSE.md file). If not, see
             <set field="psdata" from="[ products:[] ]"/>
             <iterate list="orderItemList" entry="orderItem">
                 <service-call name="popstore.ProductServices.get#ProductInfo" out-map="product" in-map="[productId:orderItem.productId]"/>
+                <log level="warn" message="product.toAssocs ${product.toAssocs}"/>
                 <set field="imageUrl" value="${ec.web.requestUrl.minus(ec.web.request.requestURI).substring(0, ec.web.requestUrl.minus(ec.web.request.requestURI).lastIndexOf('?'))}/store/content/productImage/${product?.contentList?.getFirst()?.productContentId}"/>
                 <script>psdata.products.add([
                     id_product: orderItem?.productId,
@@ -869,13 +923,13 @@ along with this software (see the LICENSE.md file). If not, see
         <actions>
             <log level="warn" message="email ${email}"/>
             <log level="warn" message="username ${username}"/>
-            <log level="warn" message="password ${password}"/>
+<!--            <log level="warn" message="password ${password}"/>-->
 
             <set field="emailAddress" from="email"/>
             <set field="username" from="emailAddress"/>
             <service-call name="popstore.CustomerServices.login#Customer" in-map="context" out-map="customerMap"/>
 
-            <log level="warn" message="context ${context.toString()}"/>
+<!--            <log level="warn" message="context ${context.toString()}"/>-->
 
 <!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopLogin.json',false))"/>-->
 
@@ -963,6 +1017,10 @@ along with this software (see the LICENSE.md file). If not, see
             <set field="emailAddress" from="email"/>
             <set field="username" from="emailAddress"/>
             <set field="gender" from="gender ? (gender == 1 ? 'Y' : 'N') : null"/>
+
+            <!-- Logging in to handle errors and verify password -->
+            <script>ec.user.loginUser(username, password)</script>
+
             <service-call name="popstore.CustomerServices.update#Customer" in-map="context" out-map="customerMap"/>
 
             <log level="warn" message="customerMap ${customerMap}"/>
@@ -972,9 +1030,10 @@ along with this software (see the LICENSE.md file). If not, see
             <!-- Start Prestashop Stuff -->
 <!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopAccountEdit.json',false))"/>-->
             <set field="code" from="200"/>
+<!--            <log level="warn" message="ec.message.messageInfos ${ec.message.messages}"/>-->
             <set field="psdata" from="[
                 registered: customerMap?.customerInfo?.partyId != null,
-                message: 'User updated successfully',
+                message: ec.message.messages[0] ?: 'User updated successfully',
                 customer_id:customerMap?.customerInfo?.partyId,
                 session_data:ec.web.sessionToken
             ]"/>
