@@ -791,25 +791,27 @@ along with this software (see the LICENSE.md file). If not, see
             <set field="attributesMap" from="attributes"/>
             <log level="warn" message="attributesMap ${attributesMap}"/>
 
-            <service-call name="popstore.ProductServices.get#ProductVariantsDisplayInfo" out-map="product" in-map="[productId:productId]"/>
-
-            <set field="variantOptionList" from="[]"/>
-            <!-- This list should only have one value, but it may have more if there are more than 3 attributes or duplicates of attributes -->
-            <set field="variantOptionSelectedList" from="[]"/>
-            <iterate list="product.variantOptions" entry="variantOption">
-                <script>variantOptionOut = variantOption.item</script>
-<!--                <log level="warn" message="variantOptionOut ${variantOptionOut}"/>-->
-<!--                <log level="warn" message="attributes[variantOptionOut.productFeatureTypeEnumId] == variantOptionOut.productFeatureId ${attributes[variantOptionOut.productFeatureTypeEnumId] == variantOptionOut.productFeatureId}"/>-->
-                <script>variantOptionList.add(variantOptionOut)</script>
-                <if condition="attributes &amp;&amp; attributes[variantOptionOut.productFeatureTypeEnumId] == variantOptionOut.productFeatureId">
-                    <set field="_variantOptionSelectedList" from="product.variantOptions.findAll{it.item.productId == variantOptionOut.productId
+            <if condition="productId">
+                <service-call name="popstore.ProductServices.get#ProductVariantsDisplayInfo" out-map="product" in-map="[productId:productId]"/>
+                <set field="variantOptionList" from="[]"/>
+                <!-- This list should only have one value, but it may have more if there are more than 3 attributes or duplicates of attributes -->
+                <set field="variantOptionSelectedList" from="[]"/>
+                <iterate list="product?.variantOptions" entry="variantOption">
+                    <script>variantOptionOut = variantOption.item</script>
+                    <!--                <log level="warn" message="variantOptionOut ${variantOptionOut}"/>-->
+                    <!--                <log level="warn" message="attributes[variantOptionOut.productFeatureTypeEnumId] == variantOptionOut.productFeatureId ${attributes[variantOptionOut.productFeatureTypeEnumId] == variantOptionOut.productFeatureId}"/>-->
+                    <script>variantOptionList.add(variantOptionOut)</script>
+                    <if condition="attributes &amp;&amp; attributes[variantOptionOut.productFeatureTypeEnumId] == variantOptionOut.productFeatureId">
+                        <set field="_variantOptionSelectedList" from="product.variantOptions.findAll{it.item.productId == variantOptionOut.productId
                         &amp;&amp; it.item.productFeatureTypeEnumId != variantOptionOut.productFeatureTypeEnumId
                         &amp;&amp; attributes[it.item.productFeatureTypeEnumId] == it.item.productFeatureId}?.item"/>
-                    <script>variantOptionSelectedList += _variantOptionSelectedList</script>
-                </if>
-            </iterate>
-<!--            <log level="warn" message="variantOptionSelectedList ${variantOptionSelectedList.toString()}"/>-->
-            <set field="productId" from="variantOptionSelectedList[0]?.productId ?: productId"/>
+                        <script>variantOptionSelectedList += _variantOptionSelectedList</script>
+                    </if>
+                </iterate>
+                <!--            <log level="warn" message="variantOptionSelectedList ${variantOptionSelectedList.toString()}"/>-->
+                <set field="productId" from="variantOptionSelectedList[0]?.productId ?: productId"/>
+            </if>
+
 
             <service-call name="popstore.CartServices.get#CartInfo" out-map="context"/>
 <!--            <log level="warn" message="deritem quantity ${orderItemList?.find{it.productId == productId}?.quantity}"/>-->
