@@ -539,9 +539,9 @@ along with this software (see the LICENSE.md file). If not, see
 
     <service verb="create" noun="ProductReview" authenticate="anonymous-all">
         <in-parameters>
-            <parameter name="productId"/>
-            <parameter name="productRating"/>
-            <parameter name="productReview"/>
+            <parameter name="productId" required="true"/>
+            <parameter name="productRating" required="true"/>
+            <parameter name="productReview" required="true"/>
         </in-parameters>
         <actions>
             <service-call name="create#mantle.product.ProductReview"
@@ -561,6 +561,7 @@ along with this software (see the LICENSE.md file). If not, see
             <entity-find entity-name="mantle.product.ProductReview" list="productReviewList">
                 <econdition field-name="productId"/>
                 <econdition field-name="statusId" value="PrvwApproved"/>
+                <order-by field-name="-postedDateTime"/>
             </entity-find>
         </actions>
     </service>

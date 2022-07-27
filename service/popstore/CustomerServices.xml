@@ -219,39 +219,47 @@ along with this software (see the LICENSE.md file). If not, see
             <service-call name="mantle.party.PartyServices.create#Account" in-map="context + [roleTypeId:'Customer', loginAfterCreate:true]" out-map="customerInfo"/>
 
 <!--            <log level="warn" message="register customer context ${context}"/>-->
-<!--            <log level="warn" message="register customer ec.user.userAccount ${ec.user.userAccount}"/>-->
+            <log level="warn" message="register customer ec.user.userAccount ${ec.user.userAccount}"/>
 
             <!-- TODO: Don't see how this would be used because the user isn't logged in yet -->
-<!--            <if condition="ec.user.userAccount != null">-->
-<!--                <set field="customerPartyId" from="ec.user.userAccount.partyId"/>-->
-<!--                &lt;!&ndash; NOTE: use the web session for attributes such as cartOrderId for security; this won't work in a stateless mode or outside a web session &ndash;&gt;-->
-<!--                <set field="sessionAttributes" from="ec.web.sessionAttributes"/>-->
-<!--                <set field="sessionAttributes.customerPartyId" from="customerPartyId"/>-->
-<!--                <set field="cartOrderId" from="sessionAttributes.cartOrderId"/>-->
+            <if condition="ec.user.userAccount != null">
+                <set field="customerPartyId" from="ec.user.userAccount.partyId"/>
+                <!-- NOTE: use the web session for attributes such as cartOrderId for security; this won't work in a stateless mode or outside a web session -->
+                <set field="sessionAttributes" from="ec.web.sessionAttributes"/>
+                <set field="sessionAttributes.customerPartyId" from="customerPartyId"/>
+                <set field="cartOrderId" from="sessionAttributes.cartOrderId"/>
 
-<!--                &lt;!&ndash; if a cartOrderId is in the session set the logged in user as the customer &ndash;&gt;-->
-<!--                <if condition="cartOrderId">-->
-<!--                    &lt;!&ndash; NOTE: make sure cartOrder has no customerPartyId, ie only find those with null to avoid order takeover &ndash;&gt;-->
-<!--                    <entity-find entity-name="OrderPart" list="orderPartList">-->
-<!--                        <econdition field-name="orderId" from="cartOrderId"/>-->
-<!--                        <econdition field-name="customerPartyId" operator="is-null"/>-->
-<!--                    </entity-find>-->
-<!--                    <if condition="orderPartList">-->
-<!--                        <set field="orderPart" from="orderPartList[0]"/>-->
-<!--                        <set field="orderPart.customerPartyId" from="customerPartyId"/>-->
-<!--                        <entity-update value-field="orderPart"/>-->
-<!--                    </if>-->
-<!--                </if>-->
+                <!-- if a cartOrderId is in the session set the logged in user as the customer -->
+                <if condition="cartOrderId &amp;&amp; customerPartyId">
+                    <!-- NOTE: make sure orderHeader has no enteredByPartyId, ie only find those with null to avoid order takeover -->
+                    <entity-find-one entity-name="OrderHeader" value-field="orderHeader" auto-field-map="[orderId:cartOrderId]"/>
+                    <if condition="!orderHeader.enteredByPartyId">
+                        <set field="orderHeader.enteredByPartyId" from="customerPartyId"/>
+                        <entity-update value-field="orderHeader"/>
 
-<!--                &lt;!&ndash; create the login key to return &ndash;&gt;-->
+                        <!-- NOTE: make sure cartOrder has no customerPartyId, ie only find those with null to avoid order takeover -->
+                        <!-- TODO: Handle multiple OrderParts -->
+                        <entity-find entity-name="OrderPart" list="orderPartList">
+                            <econdition field-name="orderId" from="cartOrderId"/>
+                            <econdition field-name="customerPartyId" operator="is-null"/>
+                        </entity-find>
+                        <if condition="orderPartList">
+                            <set field="orderPart" from="orderPartList[0]"/>
+                            <set field="orderPart.customerPartyId" from="customerPartyId"/>
+                            <entity-update value-field="orderPart"/>
+                        </if>
+                    </if>
+                </if>
+
+                <!-- create the login key to return -->
 <!--                <set field="apiKey" from="ec.user.getLoginKey()"/>-->
-<!--                <set field="moquiSessionToken" from="ec.web.sessionToken"/>-->
+                <set field="moquiSessionToken" from="ec.web.sessionToken"/>
 
-<!--                &lt;!&ndash; get customer info for convenience &ndash;&gt;-->
-<!--                <service-call name="popstore.CustomerServices.get#CustomerInfo" in-map="context" out-map="customerInfo"/>-->
+                <!-- get customer info for convenience -->
+                <service-call name="popstore.CustomerServices.get#CustomerInfo" in-map="context" out-map="customerInfo"/>
 
-<!--                <log level="warn" message="customer services customerInfo ${customerInfo}"/>-->
-<!--            </if>-->
+                <log level="warn" message="customer services customerInfo ${customerInfo}"/>
+            </if>
         </actions>
     </service>
 

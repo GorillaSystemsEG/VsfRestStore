@@ -257,8 +257,11 @@ General Order Placement and eCommerce Usage
                 <if condition="addToQuantity"><then>
                     <set field="quantity" from="quantity &gt; 0 ? orderItem.quantity-quantity : orderItem.quantity+quantity"/>
                 </then></if>
-<!--                <log level="warn" message="quantity ${quantity}"/>-->
-                <service-call name="mantle.order.OrderServices.update#OrderItem" in-map="[orderId:orderId,orderItemSeqId:orderItem.orderItemSeqId,quantity:quantity]"/>
+                <log level="warn" message="remove#Product quantity ${quantity}"/>
+                <if condition="quantity &lt; 1">
+                    <then><service-call name="mantle.order.OrderServices.delete#OrderItem" in-map="[orderId:orderId,orderItemSeqId:orderItem.orderItemSeqId]"/></then>
+                    <else><service-call name="mantle.order.OrderServices.update#OrderItem" in-map="[orderId:orderId,orderItemSeqId:orderItem.orderItemSeqId,quantity:quantity]"/></else>
+                </if>
             </then></if>
 
             <service-call name="popstore.CartServices.get#CartInfo" out-map="context"/>

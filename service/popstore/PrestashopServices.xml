@@ -536,6 +536,7 @@ along with this software (see the LICENSE.md file). If not, see
             <set field="imageUrl" value="${ec.web.requestUrl.minus(ec.web.request.requestURI).substring(0, ec.web.requestUrl.minus(ec.web.request.requestURI).lastIndexOf('?'))}/store/content/productImage/${product?.contentList?.getFirst()?.productContentId}"/>
             <set field="psdata" from="[
                 id_product: product?.productId,
+                slug: product?.productId,
                 name: product?.productName,
                 float_price: variantOptionSelectedList[0]?.prices?.listPrice ?: product?.listPrice,
                 discount_price: variantOptionSelectedList[0]?.prices?.price ?: product?.price,
@@ -595,7 +596,7 @@ along with this software (see the LICENSE.md file). If not, see
             <set field="productId" from="id_product"/>
             <service-call name="popstore.ProductServices.get#ProductReviews" out-map="reviewsList" in-map="[productId:productId]"/>
 
-<!--            <log level="warn" message="reviewsList ${reviewsList.toString()}"/>-->
+<!--            <log level="warn" message="reviewsList ${reviewsList.productReviewList.postedDateTime.toString()}"/>-->
 
             <!-- Start Prestashop Stuff -->
 <!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopListComments.json',false))"/>-->
@@ -649,14 +650,19 @@ along with this software (see the LICENSE.md file). If not, see
             <set field="productId" from="id_product"/>
             <set field="productRating" from="criterion['1']"/>
             <set field="productReview" from="comment_content"/>
+
+            <!-- TODO: Add more review errors. -->
+            <if condition="!productReview"><return message="Missing a Review Comment" type="danger" error="true"/></if>
+
             <service-call name="popstore.ProductServices.create#ProductReview" in-map="context"/>
 
             <!-- Start Prestashop Stuff -->
             <set field="success" from="true"/>
             <set field="code" from="200"/>
+            <service-call name="popstore.PrestashopServices.list#Comments" in-map="[id_product:productId]" out-map="context"/>
 <!--            <log level="warn" message="psdata last ${psdata.toString()}"/>-->
 
-            <!--            <set field="psdata" from="data?.psdata"/>-->
+<!--                        <set field="psdata" from="data?.psdata"/>-->
             <log level="warn" message="post#Comments"/>
             <!--            <log level="warn" message="context ${context.toString()}"/>-->
         </actions>
@@ -803,7 +809,6 @@ along with this software (see the LICENSE.md file). If not, see
                     <script>variantOptionList.add(variantOptionOut)</script>
                     <if condition="attributes &amp;&amp; attributes[variantOptionOut.productFeatureTypeEnumId] == variantOptionOut.productFeatureId">
                         <set field="_variantOptionSelectedList" from="product.variantOptions.findAll{it.item.productId == variantOptionOut.productId
-                        &amp;&amp; it.item.productFeatureTypeEnumId != variantOptionOut.productFeatureTypeEnumId
                         &amp;&amp; attributes[it.item.productFeatureTypeEnumId] == it.item.productFeatureId}?.item"/>
                         <script>variantOptionSelectedList += _variantOptionSelectedList</script>
                     </if>
@@ -811,7 +816,6 @@ along with this software (see the LICENSE.md file). If not, see
                 <!--            <log level="warn" message="variantOptionSelectedList ${variantOptionSelectedList.toString()}"/>-->
                 <set field="productId" from="variantOptionSelectedList[0]?.productId ?: productId"/>
             </if>
-
 
             <service-call name="popstore.CartServices.get#CartInfo" out-map="context"/>
 <!--            <log level="warn" message="deritem quantity ${orderItemList?.find{it.productId == productId}?.quantity}"/>-->
@@ -1231,7 +1235,7 @@ along with this software (see the LICENSE.md file). If not, see
     <service verb="delete" noun="Address">
         <in-parameters>
             <!-- Prestashop Only API Attributes -->
-            <parameter name="id_address" type="Map"/>
+            <parameter name="id_address"/>
         </in-parameters>
         <out-parameters>
             <parameter name="success" type="Boolean"/>
@@ -1241,7 +1245,7 @@ along with this software (see the LICENSE.md file). If not, see
         <actions>
             <log level="warn" message="id_address ${id_address}"/>
 
-            <set field="contactMechId" from="id_address?.id"/>
+            <set field="contactMechId" from="id_address"/>
             <service-call name="popstore.CustomerServices.delete#ShippingAddress" in-map="context" out-map="context"/>
 
             <!-- Start Prestashop Stuff -->
@@ -1263,7 +1267,7 @@ along with this software (see the LICENSE.md file). If not, see
             <log level="warn" message="psdata ${psdata}"/>
 
             <!--            <set field="psdata" from="data?.psdata"/>-->
-            <log level="warn" message="post#Address"/>
+            <log level="warn" message="delete#Address"/>
         </actions>
     </service>
     <service verb="set" noun="AddressCheckout">
@@ -1278,6 +1282,21 @@ along with this software (see the LICENSE.md file). If not, see
         </out-parameters>
         <actions>
             <log level="warn" message="Address Checkout context ${context.toString()}"/>
+            <service-call name="popstore.CartServices.get#ActiveOrderAndCustomer" out-map="context"/>
+
+            <set field="postalContactMechId" from="id_address"/>
+            <entity-find entity-name="OrderPart" list="orderPartList">
+                <econdition field-name="orderId" from="cartOrderId"/>
+                <date-filter from-field-name="validFromDate" thru-field-name="validThruDate"/>
+            </entity-find>
+
+            <!-- TODO: Handle edge cases -->
+            <iterate list="orderPartList" entry="orderPart">
+                <if condition="orderPart.postalContactMechId != postalContactMechId">
+                    <set field="orderPart.postalContactMechId" from="postalContactMechId"/>
+                    <entity-update value-field="orderPart"/>
+                </if>
+            </iterate>
 
 <!--            <set field="sessionAttributes" from="ec.web.sessionAttributes"/>-->
 <!--            <set field="shippingPostalContactMechId" from="id_address"/>-->
@@ -1307,7 +1326,7 @@ along with this software (see the LICENSE.md file). If not, see
 
             <entity-find-one entity-name="mantle.order.OrderHeader" value-field="orderHeader" auto-field-map="[orderId:cartOrderId]"/>
 
-            <log level="warn" message="Carriers context ${context.toString()}"/>
+<!--            <log level="warn" message="Carriers context ${context.toString()}"/>-->
 
             <!-- Start Prestashop Stuff -->
             <!--            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopAddress.json',false))"/>-->
@@ -1315,7 +1334,7 @@ along with this software (see the LICENSE.md file). If not, see
             <set field="psdata" from="[:]"/>
             <iterate list="shippingOptions" entry="shippingOption">
                 <script>psdata.put("${shippingOption.carrierPartyId}:${shippingOption.shipmentMethodEnumId}", [
-                    id: shippingOption.carrierPartyId+shippingOption.shipmentMethodEnumId,
+                    id: shippingOption.shipmentMethodEnumId,
                     name: shippingOption.carrierName &amp;&amp; shippingOption.carrierName != '_NA_' ? shippingOption.carrierName + ' : ' + shippingOption.shipmentMethodDescription : shippingOption.shipmentMethodDescription,
                     delay: ec.l10n.formatCurrency(shippingTotal, orderHeader?.currencyUomId ?: 'USD') ?: 'FREE'
                     ])</script>
@@ -1327,11 +1346,11 @@ along with this software (see the LICENSE.md file). If not, see
         </actions>
     </service>
     <service verb="set" noun="CarrierCheckout">
-<!--        <in-parameters>-->
-<!--            &lt;!&ndash; Prestashop Only API Attributes &ndash;&gt;-->
-<!--            <parameter name="id_address"/>-->
-<!--            <parameter name="id_carrier"/>-->
-<!--        </in-parameters>-->
+        <in-parameters>
+            <!-- Prestashop Only API Attributes -->
+            <parameter name="id_address" required="true"/>
+            <parameter name="id_carrier" required="true"/>
+        </in-parameters>
         <out-parameters>
             <parameter name="success" type="Boolean"/>
             <parameter name="code" type="Integer"/>
@@ -1339,6 +1358,27 @@ along with this software (see the LICENSE.md file). If not, see
         </out-parameters>
         <actions>
             <log level="warn" message="Carrier Checkout context ${context.toString()}"/>
+
+            <service-call name="popstore.CartServices.get#ActiveOrderAndCustomer" out-map="context"/>
+
+            <set field="postalContactMechId" from="id_address"/>
+            <set field="shipmentMethodEnumId" from="id_carrier"/>
+            <entity-find entity-name="OrderPart" list="orderPartList">
+                <econdition field-name="orderId" from="cartOrderId"/>
+                <econdition field-name="postalContactMechId"/>
+                <date-filter from-field-name="validFromDate" thru-field-name="validThruDate"/>
+            </entity-find>
+
+            <log level="warn" message="cartOrderId ${cartOrderId}"/>
+            <log level="warn" message="orderPartList ${orderPartList}"/>
+
+            <!-- TODO: Handle edge cases -->
+            <iterate list="orderPartList" entry="orderPart">
+                <if condition="orderPart.shipmentMethodEnumId != shipmentMethodEnumId">
+                    <set field="orderPart.shipmentMethodEnumId" from="shipmentMethodEnumId"/>
+                    <entity-update value-field="orderPart"/>
+                </if>
+            </iterate>
 
 <!--            <set field="sessionAttributes" from="ec.web.sessionAttributes"/>-->
 <!--            <set field="shippingPostalContactMechId" from="id_address"/>-->

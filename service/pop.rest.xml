@@ -36,7 +36,7 @@ along with this software (see the LICENSE.md file). If not, see
     <resource name="listcomments" require-authentication="anonymous-view">
         <method type="get"><service name="popstore.PrestashopServices.list#Comments"/></method>
     </resource>
-    <resource name="postcomment" require-authentication="anonymous-all">
+    <resource name="postcomment">
         <method type="post"><service name="popstore.PrestashopServices.post#Comments"/></method>
     </resource>
     <resource name="productSearch" require-authentication="anonymous-view">
@@ -71,7 +71,7 @@ along with this software (see the LICENSE.md file). If not, see
     <resource name="alladdresses" require-authentication="anonymous-view">
         <method type="get"><service name="popstore.PrestashopServices.get#AllAddresses"/></method>
     </resource>
-    <resource name="address" require-authentication="anonymous-view">
+    <resource name="address">
         <method type="post"><service name="popstore.PrestashopServices.post#Address"/></method>
         <method type="delete"><service name="popstore.PrestashopServices.delete#Address"/></method>
     </resource>
