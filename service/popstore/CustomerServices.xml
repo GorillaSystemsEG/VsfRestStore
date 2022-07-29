@@ -218,10 +218,6 @@ along with this software (see the LICENSE.md file). If not, see
             <!-- create account and login -->
             <service-call name="mantle.party.PartyServices.create#Account" in-map="context + [roleTypeId:'Customer', loginAfterCreate:true]" out-map="customerInfo"/>
 
-<!--            <log level="warn" message="register customer context ${context}"/>-->
-            <log level="warn" message="register customer ec.user.userAccount ${ec.user.userAccount}"/>
-
-            <!-- TODO: Don't see how this would be used because the user isn't logged in yet -->
             <if condition="ec.user.userAccount != null">
                 <set field="customerPartyId" from="ec.user.userAccount.partyId"/>
                 <!-- NOTE: use the web session for attributes such as cartOrderId for security; this won't work in a stateless mode or outside a web session -->
@@ -257,8 +253,6 @@ along with this software (see the LICENSE.md file). If not, see
 
                 <!-- get customer info for convenience -->
                 <service-call name="popstore.CustomerServices.get#CustomerInfo" in-map="context" out-map="customerInfo"/>
-
-                <log level="warn" message="customer services customerInfo ${customerInfo}"/>
             </if>
         </actions>
     </service>

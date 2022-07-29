@@ -59,35 +59,35 @@ along with this software (see the LICENSE.md file). If not, see
     <resource name="accountInfo">
         <method type="get"><service name="popstore.PrestashopServices.get#AccountInfo"/></method>
     </resource>
-    <resource name="addressform" require-authentication="anonymous-view">
+    <resource name="addressform">
         <method type="get"><service name="popstore.PrestashopServices.get#AddressForm"/></method>
     </resource>
     <resource name="accountedit">
         <method type="post"><service name="popstore.PrestashopServices.post#AccountEdit"/></method>
     </resource>
-    <resource name="orderhistory" require-authentication="anonymous-view">
+    <resource name="orderhistory">
         <method type="get"><service name="popstore.PrestashopServices.get#OrderHistory"/></method>
     </resource>
-    <resource name="alladdresses" require-authentication="anonymous-view">
+    <resource name="alladdresses">
         <method type="get"><service name="popstore.PrestashopServices.get#AllAddresses"/></method>
     </resource>
     <resource name="address">
         <method type="post"><service name="popstore.PrestashopServices.post#Address"/></method>
         <method type="delete"><service name="popstore.PrestashopServices.delete#Address"/></method>
     </resource>
-    <resource name="setaddresscheckout" require-authentication="anonymous-view">
+    <resource name="setaddresscheckout">
         <method type="post"><service name="popstore.PrestashopServices.set#AddressCheckout"/></method>
     </resource>
     <resource name="carriers" require-authentication="anonymous-view">
         <method type="get"><service name="popstore.PrestashopServices.get#Carriers"/></method>
     </resource>
-    <resource name="setcarriercheckout" require-authentication="anonymous-view">
+    <resource name="setcarriercheckout">
         <method type="post"><service name="popstore.PrestashopServices.set#CarrierCheckout"/></method>
     </resource>
-    <resource name="paymentoptions" require-authentication="anonymous-view">
+    <resource name="paymentoptions">
         <method type="get"><service name="popstore.PrestashopServices.get#PaymentOptions"/></method>
     </resource>
-    <resource name="rest" require-authentication="anonymous-view">
+    <resource name="rest">
         <id name="enumId">
             <method type="get"><service name="popstore.PrestashopServices.place#Order"/></method>
         </id>

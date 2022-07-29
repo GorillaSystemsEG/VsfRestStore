@@ -81,8 +81,6 @@ along with this software (see the LICENSE.md file). If not, see
                 <order-by field-name="sequenceNum,-fromDate"/>
             </entity-find>
 
-<!--            <log level="warn" message="product.toAssocs ${product.toAssocs}"/>-->
-            <log level="warn" message="product.toAssocs.find{it.productAssocTypeEnumId == 'PatVariant'} ${product.toAssocs.find{it.productAssocTypeEnumId == 'PatVariant'}}"/>
             <if condition="!contentList &amp;&amp; product.toAssocs.find{it.productAssocTypeEnumId == 'PatVariant'}?.productId">
                 <entity-find entity-name="mantle.product.ProductContent" list="contentList" cache="true">
                     <date-filter/><econdition field-name="productId" from="product.toAssocs.find{it.productAssocTypeEnumId == 'PatVariant'}?.productId"/>
@@ -573,6 +571,7 @@ along with this software (see the LICENSE.md file). If not, see
         </in-parameters>
         <out-parameters>
             <auto-parameters entity-name="mantle.product.category.ProductCategory"/>
+            <parameter name="categorySlug"/>
             <parameter name="subCategoryList" type="List"><parameter name="categoryInfo" type="Map"/></parameter>
         </out-parameters>
         <actions>
@@ -581,6 +580,7 @@ along with this software (see the LICENSE.md file). If not, see
             <entity-find-one entity-name="mantle.product.category.ProductCategory" value-field="productCategory" cache="true"/>
             <if condition="productCategory == null"><return error="true" message="Category not found with ID ${productCategoryId}"/></if>
             <script>context.putAll(productCategory)</script>
+            <set field="categorySlug" from="productCategory?.identifications?.find{it.identTypeEnumId == 'PcitUrlSlug'}?.idValue"/>
 
             <entity-find entity-name="mantle.product.category.ProductCategoryRollup" list="rollupList" cache="true">
                 <date-filter/><econdition field-name="parentProductCategoryId" from="productCategoryId"/>
@@ -594,6 +594,7 @@ along with this software (see the LICENSE.md file). If not, see
 
                 <!-- TODO: ProductCategoryContent for smallImageInfo -->
                 <script>subCategoryList.add([productCategoryId:subProductCategory.productCategoryId, pseudoId:subProductCategory.pseudoId,
+                        categorySlug: subProductCategory.categorySlug,
                         categoryName:subProductCategory.categoryName, description:subProductCategory.description,
                         smallImageInfo:smallImageInfo, sequenceNum:rollup.sequenceNum, subCategoryList:subProductCategory.subCategoryList])</script>
             </iterate>
@@ -676,10 +677,12 @@ along with this software (see the LICENSE.md file). If not, see
 
             <!-- get entire cached list then paginate, for huge numbers of products in a category this is a bad approach (such sites should probably be purely search based) -->
             <!-- use the name 'productList' so pagination out-parameters are created automatically -->
-            <entity-find entity-name="mantle.product.category.ProductCategoryMember" list="productList" cache="true">
+            <entity-find entity-name="mantle.product.category.ProductCategoryMember" list="productList">
                 <search-form-inputs default-order-by="${orderBy}"/>
-                <date-filter/><econdition field-name="productCategoryId"/>
+                <date-filter/>
+                <econdition field-name="productCategoryId"/>
             </entity-find>
+            <log level="warn" message="orderBy ${orderBy} ProductServices productList?.sequenceNum ${productList?.sequenceNum}"/>
             <set field="pcmList" from="productList"/>
 
             <set field="productList" from="[]"/>
@@ -713,6 +716,7 @@ along with this software (see the LICENSE.md file). If not, see
                 </if>
 
                 <script>productList.add([productId:pcmp.productId, pseudoId:product.pseudoId, productName:product.productName,
+                        productSlug: product?.otherIdentifications?.find{it.productIdTypeEnumId == 'PidtUrlSlug'}?.idValue,
                         description:product.description, price:priceMap.price, listPrice:priceMap.listPrice, priceUomId:priceMap.priceUomId,
                         sequenceNum:pcmp.sequenceNum, smallImageInfo:smallImageInfo, mediumImageInfo:mediumImageInfo, isVirtual:(product.productTypeEnumId=='PtVirtual')])</script>
             </iterate>
