@@ -24,6 +24,7 @@ along with this software (see the LICENSE.md file). If not, see
             Then, if not found, throw an error.
         </description>
         <in-parameters>
+            <parameter name="productStoreId"/>
             <parameter name="requestHostName"/>
         </in-parameters>
         <out-parameters>
@@ -31,11 +32,15 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="productStore"/>
         </out-parameters>
         <actions>
-            <set field="productStoreId" default-value="POPC_DEFAULT"/>
+            <!-- TODO: Get the productStoreId from the Hostname -->
             <set field="sessionAttributes" from="ec.web.sessionAttributes"/>
             <if condition="!sessionAttributes.productStoreId &amp;&amp; productStoreId">
                 <set field="sessionAttributes.productStoreId" from="productStoreId"/>
             </if>
+            <set field="productStoreId" from="productStoreId ?: sessionAttributes.productStoreId"/>
+
+            <if condition="!productStoreId"><return message="Product Store Id is Required" type="danger" error="true"/></if>
+
             <entity-find-one entity-name="mantle.product.store.ProductStore" value-field="productStore" cache="true"/>
 
             <return/>
@@ -72,6 +77,7 @@ along with this software (see the LICENSE.md file). If not, see
     <service verb="get" noun="LightBootstrap">
         <in-parameters>
             <parameter name="requestHostName"/>
+            <parameter name="productStoreId"/>
         </in-parameters>
         <out-parameters>
             <parameter name="success" type="Boolean"/>
@@ -79,7 +85,7 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="psdata" type="Map"/>
         </out-parameters>
         <actions>
-            <service-call name="popstore.PrestashopServices.get#ProductStoreId" in-map="[requestHostName:requestHostName]" out-map="context"/>
+            <service-call name="popstore.PrestashopServices.get#ProductStoreId" in-map="context" out-map="context"/>
 
             <set field="dataDocument" from="productStore?.storeDataDocuments?.find{it.typeEnumId == 'PsdtCategory'}?.dataDocument"/>
             <set field="queryString" value="*"/>
@@ -159,8 +165,8 @@ along with this software (see the LICENSE.md file). If not, see
             <entity-find-one entity-name="moqui.entity.document.DataDocument" value-field="dataDocument" cache="true">
                 <field-map field-name="dataDocumentId" value="PopcCategory"/></entity-find-one>
             <service-call name="org.moqui.search.SearchServices.search#DataDocuments" out-map="searchOut"
-                          in-map="[queryString:queryString, nestedQueryMap:nestedQueryMap, indexName:dataDocument.indexName,
-                        documentType:dataDocument.dataDocumentId, pageIndex:pageIndex, pageSize:pageSize, orderByFields:[], flattenDocument:false]"/>
+                          in-map="[queryString:queryString, nestedQueryMap:nestedQueryMap, indexName:dataDocument?.indexName,
+                        documentType:dataDocument?.dataDocumentId, pageIndex:pageIndex, pageSize:pageSize, orderByFields:[], flattenDocument:false]"/>
 
             <!-- Sort the categories by the parent category's sequenceNum -->
             <iterate list="searchOut?.documentList" entry="category">
@@ -616,11 +622,12 @@ along with this software (see the LICENSE.md file). If not, see
             <service-call name="popstore.PrestashopServices.get#ProductStoreId" in-map="[requestHostName:requestHostName]" out-map="context"/>
 
             <set field="searchParameter" from="s"/>
-            <service-call name="popstore.SearchServices.search#All" out-map="context"
-                          in-map="[searchParameter:searchParameter, productStoreId:productStoreId, pageIndex:pageIndex ? pageIndex : '0', pageSize:resultsPerPage?:'12']"/>
+            <if condition="searchParameter">
+                <service-call name="popstore.SearchServices.search#All" out-map="context"
+                              in-map="[searchParameter:searchParameter, productStoreId:productStoreId, pageIndex:pageIndex ? pageIndex : '0', pageSize:resultsPerPage?:'12']"/>
+            </if>
 
             <!-- Start Prestashop Stuff -->
-            <set field="data" from="ec.elastic.jsonToObject(ec.resource.getLocationText('component://PopRestStore/data/PrestashopProductSearch.json',false))"/>
             <set field="code" from="200"/>
             <set field="psdata" from="[ products:[] ]"/>
             <iterate list="productSearchResults?.productList" entry="product">
@@ -630,8 +637,9 @@ along with this software (see the LICENSE.md file). If not, see
                     link_rewrite: product?.productId,
                     regular_price_amount: product?.listPrice,
                     price_amount: product?.price,
-                    cover: [url: "${ec.web.requestUrl.minus(ec.web.request.requestURI).substring(0, ec.web.requestUrl.minus(ec.web.request.requestURI).lastIndexOf('?'))}/store/content/productImage/${product?.mediumImageInfo?.productContentId ?: product?.smallImageInfo?.productContentId}"]
-                    ]);</script>
+                    cover: [url: "${ec.web.requestUrl.minus(ec.web.request.requestURI).substring(0, ec.web.requestUrl.minus(ec.web.request.requestURI).lastIndexOf('?'))}/store/content/productImage/${product?.mediumImageInfo?.productContentId ?: product?.smallImageInfo?.productContentId}"],
+                    is_virtual: product?.productTypeEnumId=='PtVirtual'
+                ]);</script>
             </iterate>
 
 <!--            <log level="warn" message="get#ProductSearch"/>-->
