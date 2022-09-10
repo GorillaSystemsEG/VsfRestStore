@@ -1,0 +1,366 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+(C) 2022, Gorilla Systems
+-->
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-2.1.xsd">
+    <!-- ===================================================== -->
+    <!-- ================= Search Services =================== -->
+    <!-- =====================================================-->
+    <!-- Contents 
+        [1] search#All...........[OK]
+        [2] search#Products......[OK]
+        [3] search#Content.......[OK]
+        [4] search#Blog..........[OK]
+    -->
+
+    <!-- TODO:
+    -->
+
+    <service verb="search" noun="All">
+        <in-parameters>
+            <parameter name="productStoreId" required="true" />
+            <parameter name="productCategoryId" />
+            <parameter name="searchParameter" />
+            <parameter name="locale" />
+            <parameter name="pageIndex" type="Integer" default="0" />
+            <parameter name="pageSize" type="Integer" default="20" />
+        </in-parameters>
+        <out-parameters>
+            <parameter name="productSearchResults" />
+            <parameter name="contentSearchResults" />
+            <parameter name="blogSearchResults" />
+        </out-parameters>
+        <actions>
+            <!-- find locale from request cookies -->
+            <!-- vsf uses a cookie named vsf-locale -->
+            <set field="locale" from="locale?:'en_US'" />
+            <script>
+                import javax.servlet.http.Cookie
+                Cookie[] cookies = ec.web.request.getCookies()
+                if (cookies != null) {
+                    for (int i = 0; i &lt; cookies.length; i++) {
+                        if (cookies[i].getName().equals("vsf-locale")) {
+                            locale = cookies[i].getValue()
+                            break
+                        }
+                    }
+                }
+            </script>
+
+            <entity-find-one entity-name="mantle.product.store.ProductStore" value-field="productStore" cache="true" />
+
+            <set field="productDataDocumentId" from="productStore?.storeDataDocuments?.find{it.typeEnumId == 'PsdtProduct'}?.dataDocumentId ?: productStore?.productDataDocumentId" />
+            <!-- Not needed/supported at the moment -->
+            <!-- <set field="contentDataDocumentId" from="productStore?.storeDataDocuments?.find{it.typeEnumId == 'PsdtContent'}?.dataDocumentId ?: productStore?.contentDataDocumentId" /> -->
+            <!-- <set field="blogDataDocumentId" from="productStore?.storeDataDocuments?.find{it.typeEnumId == 'PsdtBlog'}?.dataDocumentId ?: productStore?.blogDataDocumentId" /> -->
+
+            <if condition="productDataDocumentId">
+                <service-call name="vsf.SearchServices.search#Products" out-map="productSearchResults" in-map="[searchParameter:searchParameter, productDataDocumentId:productDataDocumentId, pageIndex:pageIndex, pageSize:pageSize, productStoreId: productStoreId, productCategoryId:productCategoryId, locale:locale]" />
+            </if>
+
+            <!-- Not needed/supported at the moment -->
+            <!-- <if condition="contentDataDocumentId">
+                <service-call name="vsf.SearchServices.search#Content" out-map="contentSearchResults" in-map="[searchParameter:searchParameter, contentDataDocumentId:contentDataDocumentId, pageIndex:pageIndex, pageSize:pageSize]" />
+            </if>
+            <if condition="blogDataDocumentId">
+                <service-call name="vsf.SearchServices.search#Blog" out-map="blogSearchResults" in-map="[searchParameter:searchParameter, blogDataDocumentId:blogDataDocumentId, pageIndex:pageIndex, pageSize:pageSize]" />
+            </if> -->
+        </actions>
+    </service>
+
+    <service verb="search" noun="Products">
+        <in-parameters>
+            <parameter name="searchParameter" />
+            <parameter name="productDataDocumentId" />
+            <parameter name="productCategoryId" />
+            <parameter name="productStoreId" />
+            <parameter name="productFeatureIds" type="List">
+                <parameter name="productFeatureId" />
+            </parameter>
+            <parameter name="priceUomId" />
+            <parameter name="locale" />
+            <parameter name="orderByFields" type="List">
+                <parameter name="orderByField" />
+            </parameter>
+            <parameter name="pageIndex" type="Integer" default="0" />
+            <parameter name="pageSize" type="Integer" default="20" />
+        </in-parameters>
+        <out-parameters>
+            <parameter name="categoryList" type="List" />
+            <parameter name="productList" type="List">
+                <parameter name="productInfo" type="Map">
+                    <parameter name="productId" />
+                    <parameter name="pseudoId" />
+                    <parameter name="productSlug" />
+                    <parameter name="productSku" />
+                    <parameter name="productName" />
+                    <parameter name="productTypeEnumId" />
+                    <parameter name="ownerPartyId" />
+                    <parameter name="price" type="BigDecimal" />
+                    <parameter name="listPrice" type="BigDecimal" />
+                    <parameter name="priceUomId" />
+                    <parameter name="productClassDescription" />
+                    <parameter name="productRating" type="Float" />
+                    <parameter name="productReviewCount" type="Integer" />
+                    <parameter name="standardFeatureList" type="List">
+                        <parameter name="feature" type="Map">
+                            <parameter name="productFeatureId" />
+                            <parameter name="productFeatureTypeEnumId" />
+                            <parameter name="typeDescription" />
+                            <parameter name="description" />
+                        </parameter>
+                    </parameter>
+                    <parameter name="imageList" type="List">
+                        <parameter name="small" type="Map" />
+                        <parameter name="medium" type="Map" />
+                        <parameter name="large" type="Map" />
+                    </parameter>
+                    <parameter name="hasVariants" type="Boolean" />
+                    <parameter name="defaultVariant" type="Map">
+                        <parameter name="id" />
+                        <parameter name="slug" />
+                    </parameter>
+                    <parameter name="isReadyForSales" type="Boolean" />
+                    <parameter name="salesDates" type="Map">
+                        <parameter name="salesIntroDate" />
+                        <parameter name="salesDiscontinueDate" />
+                    </parameter>
+                </parameter>
+            </parameter>
+            <parameter name="productListCount" type="Integer">
+                <description>The total count of hits, not just the limited number returned.</description>
+            </parameter>
+            <parameter name="productListPageIndex" type="Integer" />
+            <parameter name="productListPageSize" type="Integer" />
+            <parameter name="productListPageMaxIndex" type="Integer" />
+            <parameter name="productListPageRangeLow" type="Integer" />
+            <parameter name="productListPageRangeHigh" type="Integer" />
+        </out-parameters>
+        <actions>
+            <!-- get product store -->
+            <if condition="productStoreId">
+                <entity-find-one entity-name="mantle.product.store.ProductStore" value-field="productStore" cache="true" />
+                <if condition="!priceUomId">
+                    <set field="priceUomId" from="productStore?.defaultCurrencyUomId" />
+                </if>
+                <set field="vendorPartyId" from="productStore?.organizationPartyId" />
+            </if>
+
+            <!-- get root search category from product store -->
+            <!-- looks at: storeCategoryTypeEnumId=PsctSearch -->
+            <!-- if not found, looks at: storeCategoryTypeEnumId=PsctViewAllow -->
+            <if condition="!productCategoryId &amp;&amp; productStoreId">
+                <entity-find entity-name="mantle.product.store.ProductStoreCategory" list="searchPscList" cache="true">
+                    <date-filter />
+                    <econdition field-name="productStoreId" />
+                    <econdition field-name="storeCategoryTypeEnumId" value="PsctSearch" />
+                </entity-find>
+                <set field="productCategoryId" from="searchPscList?.first()?.productCategoryId" />
+                <if condition="!productCategoryId">
+                    <entity-find entity-name="mantle.product.store.ProductStoreCategory" list="searchPscList" cache="true">
+                        <date-filter />
+                        <econdition field-name="productStoreId" />
+                        <econdition field-name="storeCategoryTypeEnumId" value="PsctViewAllow" />
+                    </entity-find>
+                    <set field="productCategoryId" from="searchPscList?.first()?.PsctSearch" />
+                </if>
+            </if>
+            <if condition="!productCategoryId">
+                <return type="danger" message="No search category found for store ${productStoreId}" />
+            </if>
+
+            <!-- get descendant categories, so we can search within them -->
+            <service-call name="vsf.ProductServices.get#CategoryDescendants" out-map="descGetOut" in-map="[productCategoryId:productCategoryId]" />
+
+            <!-- TODO/FUTURE: better handling of search input for more natural results -->
+            <set field="queryString" from="searchParameter ? searchParameter.split(' ').collect({ (!it || it in ['AND', 'OR', 'NOT'] || it.contains('*')) ? it : it + '*' }).join(' ') : ''" />
+            <set field="queryString" from="(queryString ? queryString + ' AND ' : '' ) + 'ownerPartyId:' + vendorPartyId" />
+
+            <!-- NOTE: with ElasticSearch and a date range query like this there is a time zone issue, reliable by date but not exact time -->
+            <set field="nowTimeLong" from="ec.user.nowTimestamp.time" />
+            <script>
+                <![CDATA[
+                import groovy.json.JsonOutput
+
+                List categoriesFilterList = [
+                    [terms: ['categories.productCategoryId': descGetOut.categoryIdList]]
+                ]
+                Map queryMap = [categories: [bool: [filter: categoriesFilterList]]]
+                nestedQueryMap = JsonOutput.toJson(queryMap)
+
+                ]]>
+            </script>
+            <log level="warn" message="productDataDocumentId: ${productDataDocumentId}\n queryString: ${queryString}\n nestedQueryMap: ${nestedQueryMap}" />
+
+            <entity-find-one entity-name="moqui.entity.document.DataDocument" value-field="productDataDocument" cache="true">
+                <field-map field-name="dataDocumentId" from="productDataDocumentId" />
+            </entity-find-one>
+            <service-call name="org.moqui.search.SearchServices.search#DataDocuments" out-map="productSearchOut" in-map="[queryString:queryString, nestedQueryMap:nestedQueryMap, indexName:productDataDocument.indexName,
+                        documentType:productDataDocument.dataDocumentId, pageIndex:pageIndex, pageSize:pageSize, flattenDocument:false]" />
+
+            <set field="productListRaw" from="productSearchOut.documentList" />
+            <set field="productList" from="[]" />
+            <set field="productListCount" from="productSearchOut.documentListCount" />
+            <set field="productListPageIndex" from="productSearchOut.documentListPageIndex" />
+            <set field="productListPageSize" from="productSearchOut.documentListPageSize" />
+            <set field="productListPageMaxIndex" from="productSearchOut.documentListPageMaxIndex" />
+            <set field="productListPageRangeLow" from="productSearchOut.documentListPageRangeLow" />
+            <set field="productListPageRangeHigh" from="productSearchOut.documentListPageRangeHigh" />
+
+            <set field="relevantCategoryList" from="[]" />
+            <!-- get prices, small/medium image info for products -->
+            <iterate list="productListRaw" entry="productRaw">
+                <script>relevantCategoryList.addAll(productRaw.categories?.collect{[categoryId: it.productCategoryId, categoryName: it.category]}?:[])</script>
+
+                <!-- identifications -->
+                <set field="productSlug" from="productRaw.identifications?.find{it.productIdTypeEnumId == 'PidtSlug'}?.idValue?:productId" />
+                <set field="productSku" from="productRaw.identifications?.find{it.productIdTypeEnumId == 'PidtSku'}?.idValue?:pseudoId" />
+
+                <!-- prices -->
+                <!-- TODO: would be more efficient to pull prices from the doc, filter by date, store, etc, etc, like: "prices": [ { "price": 11119.99, "priceTypeEnumId": "PptCurrent", "pricePurposeEnumId": "PppPurchase", "priceFromDate": 1265184000000, "priceUomId": "USD" } ] -->
+                <service-call name="mantle.product.PriceServices.get#ProductPrice" out-map="priceMap" out-map-add-to-existing="false" in-map="[productId:productRaw.productId, priceUomId:priceUomId, productStoreId:productStoreId, vendorPartyId:vendorPartyId]" />
+
+                <!-- localization  -->
+                <!-- find product name (localized) -->
+                <if condition="locale">
+                    <!-- filter after by locale to streamline cached find -->
+                    <set field="langLocale" from="locale.contains('_') ? locale.substring(locale.indexOf('_')) : null" />
+                    <set field="localizedContentList" from="productRaw.contents.findAll({ it.locale == null || it.locale == locale || it.locale == langLocale })" />
+                </if>
+
+                <set field="nameContent" from="localizedContentList?.find({ it.productContentTypeEnumId == 'PcntProductName'})" />
+                <set field="productName" from="nameContent?.contentText?:productRaw.name" />
+                <log message="nameContent ${nameContent}" />
+
+                <!-- Find product description (small) -->
+                <set field="descriptionContent" from="localizedContentList.find({ it.productContentTypeEnumId == 'PcntDescription'})" />
+                <if condition="descriptionContent?.contentText">
+                    <then>
+                        <set field="descriptionSmall" from="descriptionContent?.contentText" />
+                    </then>
+                    <else>
+                        <set field="descriptionSmall" from="productRaw.description" />
+                    </else>
+                </if>
+
+                <!-- Find product description (long) -->
+                <set field="descriptionLongContent" from="localizedContentList.find({ it.productContentTypeEnumId == 'PcntDescriptionLong'})" />
+                <if condition="descriptionLongContent?.contentText">
+                    <then>
+                        <set field="descriptionLong" from="descriptionContent?.contentText" />
+                    </then>
+                    <else>
+                        <set field="descriptionLong" from="productRaw.description" />
+                    </else>
+                </if>
+
+                <!-- images -->
+                <set field="imageList" from="[]" />
+                <iterate list="productRaw.contents?.findAll( { it.productContentTypeEnumId in ['PcntImageSmall','PcntImageMedium','PcntImageLarge']} )" entry="productContent">
+                    <if condition="productContent.productContentTypeEnumId in ['PcntImageSmall','PcntImageMedium','PcntImageLarge']">
+                        <set field="urlRegexPattern" from="/(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s]{2,}|www\.[a-zA-Z0-9]+\.[^\s]{2,})/" />
+                        <if condition="productContent.contentUrl?.matches(urlRegexPattern)">
+                            <!-- Content is a static url -->
+                            <script>imageList.add([small:productContent.contentUrl,medium:productContent.contentUrl,large:productContent.contentUrl])</script>
+                            <else>
+                                <set field="imageUrl" value="${hostName}/store/content/productImage/${productContent.productContentId}" />
+                                <script>imageList.add([small:imageUrl,medium:imageUrl,large:imageUrl])</script>
+                            </else>
+                        </if>
+                    </if>
+                </iterate>
+
+                <!-- find variant display info -->
+                <set field="hasVariants" from="(productRaw.productTypeEnumId=='PtVirtual')" />
+                <if condition="hasVariants">
+                    <if condition="productRaw.assocs">
+                        <set field="defaultVariantId" from="assocs[0].assocToId" />
+                        <entity-find-one entity-name="mantle.product.ProductOtherIdentification" value-field="productVariantIdent" cache="true">
+                            <field-map field-name="productId" from="defaultVariantId" />
+                            <field-map field-name="productIdTypeEnumId" value="PidtUrlSlug" />
+                        </entity-find-one>
+                        <set field="variantSlug" from="productVariantIdent?.idValue?:defaultVariantId" />
+                    </if>
+
+                    <set field="defaultVariant" from="[id:hasVariants?defaultVariantId:productRaw.productId,slug:hasVariants?variantSlug:productSlug]" />
+                </if>
+
+                <script>
+                    productList.add([
+                       productId: productRaw.productId, 
+                       pseudoId: productRaw.pseudoId, 
+                       productSku: productSku, 
+                       productSlug: productSlug, 
+                       productName: productName,
+                       productTypeEnumId: productRaw.productTypeEnumId,
+                       ownerPartyId: productRaw.ownerPartyId,
+                       price: priceMap.price,
+                       listPrice: priceMap.listPrice,
+                       priceUomId: priceMap.priceUomId,
+                       descriptionLong:descriptionLong,
+                       descriptionSmall:descriptionSmall,
+                       imageList:imageList,
+                       hasVariants:hasVariants,
+                       defaultVariant:defaultVariant
+                    ])
+                </script>
+            </iterate>
+
+            <!-- Build a category list from results -->
+            <set field="categoryList" from="relevantCategoryList.unique(false) { a, b ->
+                a.categoryId &lt;=> b.categoryId }" />
+
+            <iterate list="categoryList" entry="category">
+                <service-call name="vsf.ProductServices.get#CategoryIdentification" in-map="[productCategoryId:category.categoryId]" out-map="catIdOut" out-map-add-to-existing="false"></service-call>
+                <set field="category.slug" from="catIdOut?.categorySlug?:category.categoryId" />
+
+                <if condition="locale">
+                    <entity-find entity-name="mantle.product.category.ProductCategoryContent" list="productCategoryContentList" cache="true">
+                        <date-filter />
+                        <econdition field-name="locale" />
+                        <econdition field-name="productCategoryId" from="category.categoryId" />
+                    </entity-find>
+
+                    <set field="productCategoryLocalized" from="productCategoryContentList?.find{it.categoryContentTypeEnumId == 'PcctCategoryName'}" />
+
+                    <set field="category.categoryName" from="productCategoryLocalized?.description?:category.categoryName" />
+                </if>
+            </iterate>
+        </actions>
+    </service>
+
+    <service verb="search" noun="Content">
+        <in-parameters>
+            <parameter name="searchParameter" />
+            <parameter name="contentDataDocumentId" />
+        </in-parameters>
+        <out-parameters>
+            <parameter name="contentDocumentList" />
+        </out-parameters>
+        <actions>
+            <entity-find-one entity-name="moqui.entity.document.DataDocument" value-field="contentDataDocument" cache="true">
+                <field-map field-name="dataDocumentId" from="contentDataDocumentId" />
+            </entity-find-one>
+            <service-call name="org.moqui.search.SearchServices.search#DataDocuments" out-map="contentSearchOut" in-map="[queryString:searchParameter, indexName:contentDataDocument.indexName, documentType:contentDataDocument.dataDocumentId]" />
+            <set field="contentDocumentList" from="contentSearchOut.documentList" />
+        </actions>
+    </service>
+
+    <service verb="search" noun="Blog">
+        <in-parameters>
+            <parameter name="searchParameter" />
+            <parameter name="blogDataDocumentId" />
+        </in-parameters>
+        <out-parameters>
+            <parameter name="blogDocumentList" />
+        </out-parameters>
+        <actions>
+            <entity-find-one entity-name="moqui.entity.document.DataDocument" value-field="blogDataDocument" cache="true">
+                <field-map field-name="dataDocumentId" from="blogDataDocumentId" />
+            </entity-find-one>
+            <service-call name="org.moqui.search.SearchServices.search#DataDocuments" out-map="blogSearchOut" in-map="[queryString:searchParameter, indexName:blogDataDocument.indexName, documentType:blogDataDocument.dataDocumentId]" />
+            <set field="blogDocumentList" from="blogSearchOut.documentList" />
+        </actions>
+    </service>
+
+</services>

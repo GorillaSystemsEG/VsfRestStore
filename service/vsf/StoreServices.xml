@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+(C) 2022, Gorilla Systems
+-->
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-2.1.xsd">
+
+    <!-- ===================================================== -->
+    <!-- ========== Store Services ========== -->
+    <!-- =====================================================-->
+    <!-- Contents 
+        [1] get#ProductStoreIdFromHostName......[OK]
+        [2] get#StoreInfo..............[OK]
+        [3] get#Geos..............[OK]
+        [4] get#Locales........[OK]
+    -->
+
+    <!-- TODO:
+        [1] Dynamic GEO Filters (Per Store)
+        [2] Dynamic Locale Filters (Per Store)
+        [3] In get#StoreInfo, Refactor category code to its own service.
+    -->
+    <service verb="get" noun="ProductStoreIdFromHostName">
+        <description>Finds a product store matching hostname in ProductStoreSettings</description>
+        <in-parameters>
+            <parameter name="requestHostName" />
+        </in-parameters>
+        <out-parameters>
+            <parameter name="productStoreId" />
+        </out-parameters>
+        <actions>
+            <set field="productStoreId" from="null" />
+            <if condition="!requestHostName">
+                <return />
+            </if>
+
+            <entity-find entity-name="mantle.product.store.ProductStoreSetting" list="hostSettingList">
+                <econdition field-name="settingTypeEnumId" value="PsstHostname" />
+                <date-filter />
+                <order-by field-name="-fromDate" />
+            </entity-find>
+
+            <iterate list="hostSettingList" entry="hostSetting">
+                <set field="hostPattern" from="hostSetting.settingValue" />
+                <if condition="hostPattern != null &amp;&amp; ((String) requestHostName).matches((String) hostPattern)">
+                    <set field="productStoreId" from="hostSetting.productStoreId" />
+                </if>
+            </iterate>
+
+            <if condition="!productStoreId">
+                <log level="warn" message="No store found for hostname ${requestHostName}" />
+            </if>
+        </actions>
+    </service>
+
+    <service verb="get" noun="StoreInfo">
+        <description>
+            This service is meant to be called from the VSF express server, and not directly from client's browser.
+            This way, a product store id can be configured in the VSF deployment &amp; send automatically with the request.
+        </description>
+        <in-parameters>
+            <parameter name="productStoreId" />
+            <parameter name="locale" default="ec.user.locale?.toString()" />
+        </in-parameters>
+        <out-parameters>
+            <parameter name="productStoreId" type="String" />
+            <parameter name="storeName" type="String" />
+            <parameter name="storeDomain" type="String" />
+            <parameter name="defaultLocale" type="String" />
+            <parameter name="defaultCurrency" type="String" />
+            <parameter name="menuCategoryList" type="List">
+                <parameter name="menuCategory" type="Map">
+                    <parameter name="id" type="String" />
+                    <parameter name="slug" type="String" />
+                    <parameter name="label" type="String" />
+                </parameter>
+            </parameter>
+            <parameter name="countryList" type="List">
+                <parameter name="countryDetail" type="Map">
+                    <parameter name="geoId" type="String" />
+                    <parameter name="geoName" type="String" />
+                    <parameter name="regionList" type="List">
+                        <parameter name="regionDetail" type="Map">
+                            <parameter name="geoId" type="String" />
+                            <parameter name="geoName" type="String" />
+
+                        </parameter>
+                    </parameter>
+                </parameter>
+            </parameter>
+        </out-parameters>
+        <actions>
+            <!-- get locale -->
+            <set field="locale" value="en" />
+            <script>
+                import javax.servlet.http.Cookie
+                Cookie[] cookies = ec.web.request.getCookies()
+                println cookies
+                if (cookies != null) {
+                    for (int i = 0; i &lt; cookies.length; i++) {
+                        println 'cookie' + cookies[i].getName()
+                        if (cookies[i].getName().equals("vsf-locale")) {
+                            locale = cookies[i].getValue()
+                            break
+                        }
+                    }
+                }
+            </script>
+
+            <!-- Attempt to get product store from session attributes -->
+            <if condition="ec.web.sessionAttributes?.productStoreId">
+                <set field="productStoreId" from="ec.web.sessionAttributes.productStoreId" />
+            </if>
+
+            <!-- Attempt to get product store from host name -->
+            <!-- Note: hostname is the SERVER host, so if we have multiple websites per deployment,
+                we need to look at the REQUEST host name instead. -->
+            <if condition="!productStoreId">
+                <service-call name="vsf.StoreServices.get#ProductStoreIdFromHostName" in-map="[requestHostName:ec.web.getHostName(false)]" out-map="context" />
+
+                <if condition="!productStoreId">
+                    <return error="true" message="Could not find store from host name." />
+                </if>
+            </if>
+
+            <!-- Set product store to session attributes -->
+            <if condition="!ec.web.sessionAttributes.productStoreId &amp;&amp; productStoreId">
+                <set field="ec.web.sessionAttributes.productStoreId" from="productStoreId" />
+            </if>
+
+            <!-- Find product store -->
+            <entity-find-one entity-name="mantle.product.store.ProductStore" value-field="productStore" cache="true" />
+
+            <!-- Prepare response -->
+            <set field="storeName" from="productStore.storeName" />
+            <set field="storeDomain" from="productStore.storeDomain" />
+            <set field="defaultLocale" from="productStore.defaultLocale" />
+            <set field="defaultCurrency" from="productStore.defaultCurrencyUomId" />
+            <set field="menuCategoryList" from="[]" />
+
+            <entity-find-one entity-name="mantle.product.store.ProductStoreCategory" value-field="browseRoot">
+                <field-map field-name="productStoreId" from="productStoreId" />
+                <field-map field-name="storeCategoryTypeEnumId" value="PsctBrowseRoot" />
+            </entity-find-one>
+
+            <entity-find entity-name="mantle.product.category.ProductCategoryRollup" list="childCategoryList">
+                <econdition field-name="parentProductCategoryId" from="browseRoot?.productCategoryId" />
+            </entity-find>
+
+            <!-- Build category list -->
+            <iterate list="childCategoryList" entry="category">
+                <entity-find-one entity-name="mantle.product.category.ProductCategory" value-field="productCategory">
+                    <field-map field-name="productCategoryId" from="category.productCategoryId" />
+                </entity-find-one>
+                <script>
+                    menuCategoryList.add([
+                        id: productCategory?.productCategoryId,
+                        slug: productCategory?.identifications?.find{it.identTypeEnumId == 'PcitUrlSlug'}?.idValue ?: productCategory?.productCategoryId,
+                        label: (local!='en')?(productCategory?.contents?.find{ (it.locale == locale) &amp;&amp; (it.categoryContentTypeEnumId=='PcctCategoryName')}?.description?:productCategory?.categoryName):(productCategory?.categoryName)
+                    ]);
+                </script>
+            </iterate>
+
+            <entity-find entity-name="moqui.basic.Geo" list="geoList">
+                <!-- TODO: ADD Dynamic settings here. -->
+                <econdition field-name="geoId" value="EGY" />
+                <econdition field-name="geoTypeEnumId" value="GEOT_COUNTRY" />
+                <select-field field-name="geoId" />
+                <select-field field-name="geoName" />
+                <order-by field-name="geoName" />
+            </entity-find>
+
+            <set field="countryList" from="geoList.collect{[geoId: it.geoId, geoName: it.geoName]}" type="List" />
+            <entity-find entity-name="moqui.basic.Geo" list="geoList">
+                <econdition field-name="geoTypeEnumId" value="GEOT_COUNTRY" />
+                <order-by field-name="geoName" />
+            </entity-find>
+
+            <iterate list="countryList" entry="country">
+                <service-call name="org.moqui.impl.BasicServices.get#GeoRegionsForDropDown" in-map="[geoId:country.geoId]" out-map="regionResult" />
+
+                <set field="regionList" from="[]" />
+                <iterate list="regionResult?.resultList" entry="region">
+                    <script>
+                        regionList.add([
+                            geoId: region.geoId,
+                            geoName: region.geoName
+                        ])
+                    </script>
+                </iterate>
+
+                <set field="country.regionList" from="regionList" />
+            </iterate>
+
+        </actions>
+    </service>
+
+    <service verb="get" noun="Geos">
+        <out-parameters>
+            <parameter name="geoList" />
+        </out-parameters>
+        <actions>
+            <entity-find entity-name="moqui.basic.Geo" list="geoList">
+                <econdition field-name="geoTypeEnumId" value="GEOT_COUNTRY" />
+                <econdition field-name="geoId" value="EGY" />
+                <order-by field-name="geoName" />
+            </entity-find>
+        </actions>
+    </service>
+
+    <service verb="get" noun="Locales">
+        <out-parameters>
+            <parameter name="localeStringList" />
+        </out-parameters>
+        <actions>
+            <set field="localeStringList" from="[]" />
+            <iterate list="Locale.getAvailableLocales()" entry="lcl">
+                <script>
+                    localeStringList.add([locale:lcl.toString(), name:lcl.getDisplayName(ec.user.locale)])
+                </script>
+            </iterate>
+            <order-map-list list="localeStringList">
+                <order-by field-name="name" />
+            </order-map-list>
+        </actions>
+    </service>
+
+</services>

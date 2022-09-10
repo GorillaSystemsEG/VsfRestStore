@@ -1,4 +1,4 @@
-POP REST Store (https://github.com/moqui/PopRestStore)
+VSF REST Store (https://github.com/GorillaSysetmsEG/VsfRestStore)
 
 This software is in the public domain under CC0 1.0 Universal plus a
 Grant of Patent License.
@@ -34,6 +34,7 @@ that are otherwise encumbered.
 
 Signed by git commit adding my legal name and git username:
 
+Written in 2022 by Marwan Dessouki - marwand
 Written in 2018 by David E. Jones - jonesde
 Written in 2018 by Sergio Escobar - sereschen
 Written in 2018 by Anderson Urrego Restrepo - xlreconlx
@@ -66,6 +67,7 @@ litigation is filed.
 
 Signed by git commit adding my legal name and git username:
 
+Written in 2022 by Marwan Dessouki - marwand
 Written in 2018 by David E. Jones - jonesde
 Written in 2018 by Sergio Escobar - sereschen
 Written in 2018 by Anderson Urrego Restrepo - xlreconlx

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+This software is in the public domain under CC0 1.0 Universal plus a
+Grant of Patent License.
+
+To the extent possible under law, the author(s) have dedicated all
+copyright and related and neighboring rights to this software to the
+public domain worldwide. This software is distributed without any
+warranty.
+
+You should have received a copy of the CC0 Public Domain Dedication
+along with this software (see the LICENSE.md file). If not, see
+<http://creativecommons.org/publicdomain/zero/1.0/>.
+-->
+<entity-facade-xml type="seed-initial">
+    <!-- ecommerce authz/permission for ALL users -->
+    <moqui.security.ArtifactGroup artifactGroupId="VSFRS_API" description="VSF REST API (via root screen)" />
+    <moqui.security.ArtifactGroupMember artifactGroupId="VSFRS_API" artifactTypeEnumId="AT_REST_PATH" inheritAuthz="Y" artifactName="/vsf" />
+    <moqui.security.ArtifactAuthz artifactAuthzId="VSFRS_API_ALL" userGroupId="ALL_USERS" artifactGroupId="VSFRS_API" authzTypeEnumId="AUTHZT_ALWAYS" authzActionEnumId="AUTHZA_ALL" />
+
+    <!-- PASSWORD RESET TEKMPLATE -->
+    <moqui.basic.email.EmailTemplate emailTemplateId="VSF_PASSWORD_RESET" description="Default Password Reset" emailServerId="SYSTEM"
+    emailTypeEnumId="EMT_PWD_RESET" bodyScreenLocation="component://VsfRestStore/screen/PasswordReset.xml" webappName="webroot"
+    fromAddress="example@company.com" ccAddresses="" bccAddresses="" subject="Password Reset" sendPartial="Y"/>
+
+</entity-facade-xml>
+            

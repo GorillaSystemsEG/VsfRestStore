@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+(C) 2022, Gorilla Systems
+-->
+
+<!-- General Guideline Verbs: GET=find, POST=create/do, PUT=store (create or update), PATCH=update, DELETE=delete  -->
+
+<resource xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/rest-api-2.1.xsd" name="vsf" displayName="Vue Storefront API" version="1.0.0" description="Services for eCommerce">
+
+    <!-- Store -->
+    <resource name="store" require-authentication="anonymous-view">
+        <method type="get">
+            <service name="vsf.StoreServices.get#StoreInfo" />
+        </method>
+    </resource>
+
+    <!-- Login and Register -->
+    <resource name="login" require-authentication="anonymous-all">
+        <method type="post">
+            <service name="vsf.CustomerServices.login#Customer" />
+        </method>
+    </resource>
+    <resource name="logout" require-authentication="anonymous-view">
+        <method type="get">
+            <service name="vsf.CustomerServices.logout#Customer" />
+        </method>
+    </resource>
+    <resource name="register" require-authentication="anonymous-all">
+        <method type="post">
+            <service name="vsf.CustomerServices.register#Customer" />
+        </method>
+    </resource>
+    <resource name="resetPassword" require-authentication="anonymous-all">
+        <method type="post">
+            <service name="vsf.CustomerServices.reset#Password" />
+        </method>
+    </resource>
+
+    <resource name="customer">
+        <!-- NOTE: allows current session with customerPartyId server side for customers with no UserAccount (current session only), so auth not required -->
+        <resource name="info">
+            <method type="get">
+                <service name="vsf.CustomerServices.get#CustomerInfo" />
+            </method>
+            <method type="put">
+                <service name="vsf.CustomerServices.update#Customer" />
+            </method>
+        </resource>
+        <resource name="updatePassword" require-authentication="anonymous-all">
+            <method type="put">
+                <service name="vsf.CustomerServices.update#CustomerPassword" />
+            </method>
+        </resource>
+        <resource name="setPassword" require-authentication="anonymous-all">
+            <method type="post">
+                <service name="vsf.CustomerServices.set#CustomerPassword" />
+            </method>
+        </resource>
+
+        <!-- START: TODO -->
+        <!-- <resource name="paymentMethods">
+            <method type="get">
+                <service name="vsf.CustomerServices.get#PaymentMethods" />
+            </method>
+            <method type="put">
+                <service name="vsf.CustomerServices.store#CreditCard" />
+            </method>
+            <id name="paymentMethodId">
+                <method type="delete">
+                    <service name="vsf.CustomerServices.delete#paymentMethod" />
+                </method>
+            </id>
+        </resource> -->
+        <!-- END: TODO -->
+
+        <resource name="shippingAddresses">
+            <method type="get">
+                <service name="vsf.CustomerServices.get#ShippingAddresses" />
+            </method>
+            <method type="put">
+                <service name="vsf.CustomerServices.create#ShippingAddress" />
+            </method>
+            <method type="patch">
+                <service name="vsf.CustomerServices.update#ShippingAddress" />
+            </method>
+            <method type="delete">
+                <service name="vsf.CustomerServices.delete#ShippingAddress" />
+            </method>
+        </resource>
+
+        <resource name="orders">
+            <method type="get">
+                <service name="vsf.CustomerServices.get#CustomerOrders" />
+            </method>
+        </resource>
+    </resource>
+
+    <resource name="products" require-authentication="anonymous-view">
+        <resource name="detail">
+            <method type="get">
+                <service name="vsf.ProductServices.get#ProductInfo" />
+            </method>
+        </resource>
+        <resource name="search">
+            <method type="get">
+                <service name="vsf.SearchServices.search#All" />
+            </method>
+        </resource>        
+        <resource name="reviews">
+            <method type="get">
+                <service name="vsf.ProductServices.get#ProductReviews" />
+            </method>
+            <method type="post">
+                <service name="vsf.ProductServices.create#ProductReview" />
+            </method>
+        </resource>
+
+        <resource name="category">
+            <method type="get">
+                <service name="vsf.ProductServices.get#CategoryProducts" />
+            </method>
+        </resource>
+        <resource name="featured">
+            <method type="get">
+                <service name="vsf.ProductServices.get#FeaturedProducts" />
+            </method>
+        </resource>
+        <resource name="related">
+            <method type="get">
+                <service name="vsf.ProductServices.get#RelatedProducts" />
+            </method>
+        </resource>
+
+        <!-- TODO -->
+        <!-- <resource name="SearchProducts">
+            <method type="get">
+                <service name="vsf.ProductServices.get#SortedProductList" />
+            </method>
+        </resource> -->
+    </resource>
+
+    <!-- Cart and Checkout -->
+    <resource name="cart" require-authentication="anonymous-all">
+        <method type="get">
+            <service name="vsf.CartServices.get#CartInfo" />
+        </method>
+        <resource name="add">
+            <method type="post">
+                <service name="vsf.CartServices.add#Product" />
+            </method>
+        </resource>
+        <resource name="updateProductQuantity">
+            <method type="post">
+                <service name="vsf.CartServices.update#ProductQuantity" />
+            </method>
+        </resource>
+        <resource name="remove">
+            <method type="delete">
+                <service name="vsf.CartServices.remove#Product" />
+            </method>
+        </resource>
+        <resource name="promo">
+            <method type="post">
+                <service name="vsf.CartServices.add#OrderPromoCode" />
+            </method>
+            <method type="delete">
+                <service name="vsf.CartServices.remove#OrderPromoCode" />
+            </method>
+        </resource>
+        <resource name="shippingAddress">
+            <method type="post">
+                <service name="vsf.CartServices.set#OrderShippingAddress" />
+            </method>
+        </resource>
+        <resource name="shippingOptions">
+            <method type="get">
+                <service name="vsf.CartServices.get#ShippingOptions" />
+            </method>
+            <method type="post">
+                <service name="vsf.CartServices.set#ShippingOption" />
+            </method>
+        </resource>
+        <resource name="paymentOptions">
+            <method type="get">
+                <service name="vsf.CartServices.get#PaymentOptions" />
+            </method>
+        </resource>
+        <resource name="place">
+            <method type="post">
+                <service name="vsf.CartServices.place#CartOrder" />
+            </method>
+        </resource>
+    </resource>
+</resource>
