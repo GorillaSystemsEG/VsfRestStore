@@ -125,6 +125,11 @@
                         <parameter name="salesIntroDate" />
                         <parameter name="salesDiscontinueDate" />
                     </parameter>
+                    <parameter name="isProductAvailable" type="Boolean" />
+                    <parameter name="productStock" type="BigDecimal" />
+                    <parameter name="minimalPrice" type="BigDecimal" />
+                    <parameter name="maximalPrice" type="BigDecimal" />
+                    <parameter name="isDiscounted" type="Boolean" />
                 </parameter>
             </parameter>
             <parameter name="productListCount" type="Integer">
@@ -155,14 +160,14 @@
                     <econdition field-name="productStoreId" />
                     <econdition field-name="storeCategoryTypeEnumId" value="PsctSearch" />
                 </entity-find>
-                <set field="productCategoryId" from="searchPscList?.first()?.productCategoryId" />
+                <set field="productCategoryId" from="searchPscList[0]?.productCategoryId" />
                 <if condition="!productCategoryId">
                     <entity-find entity-name="mantle.product.store.ProductStoreCategory" list="searchPscList" cache="true">
                         <date-filter />
                         <econdition field-name="productStoreId" />
                         <econdition field-name="storeCategoryTypeEnumId" value="PsctViewAllow" />
                     </entity-find>
-                    <set field="productCategoryId" from="searchPscList?.first()?.PsctSearch" />
+                    <set field="productCategoryId" from="searchPscList[0]?.PsctSearch" />
                 </if>
             </if>
             <if condition="!productCategoryId">
@@ -190,7 +195,7 @@
 
                 ]]>
             </script>
-            <log level="warn" message="productDataDocumentId: ${productDataDocumentId}\n queryString: ${queryString}\n nestedQueryMap: ${nestedQueryMap}" />
+            <!-- <log level="warn" message="productDataDocumentId: ${productDataDocumentId}\n queryString: ${queryString}\n nestedQueryMap: ${nestedQueryMap}" /> -->
 
             <entity-find-one entity-name="moqui.entity.document.DataDocument" value-field="productDataDocument" cache="true">
                 <field-map field-name="dataDocumentId" from="productDataDocumentId" />
@@ -228,9 +233,16 @@
                     <set field="localizedContentList" from="productRaw.contents.findAll({ it.locale == null || it.locale == locale || it.locale == langLocale })" />
                 </if>
 
-                <set field="nameContent" from="localizedContentList?.find({ it.productContentTypeEnumId == 'PcntProductName'})" />
-                <set field="productName" from="nameContent?.contentText?:productRaw.name" />
-                <log message="nameContent ${nameContent}" />
+                <set field="nameContent" from="localizedContentList.find({ it.productContentTypeEnumId == 'PcntProductName'})" />
+                <if condition="nameContent?.contentLocation">
+                    <then>
+                        <set field="productName" from="ec.resource.getLocationText(nameContent?.contentLocation, true)" />
+                    </then>
+                    <else>
+                        <set field="productName" from="nameContent?.description?:productRaw.name" />
+                    </else>
+                </if>
+
 
                 <!-- Find product description (small) -->
                 <set field="descriptionContent" from="localizedContentList.find({ it.productContentTypeEnumId == 'PcntDescription'})" />
@@ -270,20 +282,25 @@
                     </if>
                 </iterate>
 
-                <!-- find variant display info -->
+                <!-- Find variant display info -->
                 <set field="hasVariants" from="(productRaw.productTypeEnumId=='PtVirtual')" />
-                <if condition="hasVariants">
-                    <if condition="productRaw.assocs">
-                        <set field="defaultVariantId" from="assocs[0].assocToId" />
-                        <entity-find-one entity-name="mantle.product.ProductOtherIdentification" value-field="productVariantIdent" cache="true">
-                            <field-map field-name="productId" from="defaultVariantId" />
-                            <field-map field-name="productIdTypeEnumId" value="PidtUrlSlug" />
-                        </entity-find-one>
-                        <set field="variantSlug" from="productVariantIdent?.idValue?:defaultVariantId" />
-                    </if>
+                <service-call name="vsf.ProductServices.get#ProductVariantsBriefInfo" out-map="productVariantOut" in-map="[productId:productRaw.productId, productStoreId:productStoreId, locale:locale]" out-map-add-to-existing="false" />
 
-                    <set field="defaultVariant" from="[id:hasVariants?defaultVariantId:productRaw.productId,slug:hasVariants?variantSlug:productSlug]" />
+                <if condition="hasVariants">
+                    <set field="variantOptions" from="productVariantOut?.variantOptions" />
+                    <set field="defaultVariant" from="[id:productVariantOut?.variantOptions[0]?.productId,slug:productVariantOut?.variantOptions[0]?.productSlug]" />
+
+                    <set field="priceUomId" from="productVariantOut.priceUomId" />
+                    <else>
+                        <service-call name="vsf.ProductServices.find#ProductAvailability" out-map="productAvailOut" in-map="[productId:productRaw.productId, productStoreId:productStoreId]" />
+                        <set field="isProductAvailable" from="(!'Y'.equals(productStore.requireInventory) || productAvailOut?.productAvailability[productRaw.productId])?:false" />
+                        <set field="productStock" from="productAvailOut?.productStock[productRaw.productId]?:0" />
+                    </else>
                 </if>
+
+                <set field="minimalPrice" from="productVariantOut.minimalPrice" />
+                <set field="maximalPrice" from="productVariantOut.maximalPrice" />
+                <set field="isDiscounted" from="productVariantOut.isDiscounted" />
 
                 <script>
                     productList.add([
@@ -301,7 +318,12 @@
                        descriptionSmall:descriptionSmall,
                        imageList:imageList,
                        hasVariants:hasVariants,
-                       defaultVariant:defaultVariant
+                       defaultVariant:defaultVariant,
+                       minimalPrice:minimalPrice,
+                       maximalPrice:maximalPrice,
+                       isDiscounted:isDiscounted,
+                       isProductAvailable:isProductAvailable,
+                       productStock:productStock
                     ])
                 </script>
             </iterate>

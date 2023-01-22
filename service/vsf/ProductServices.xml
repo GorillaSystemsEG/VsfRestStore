@@ -252,15 +252,23 @@ along with this software (see the LICENSE.md file). If not, see
                     <econdition field-name="productCategoryId" />
                 </entity-find>
 
-                <set field="productCategoryLocalized" from="productCategoryContentList.find{it.categoryContentTypeEnumId == 'PcctCategoryName'}" />
+                <set field="nameContent" from="productCategoryContentList.find({ it.categoryContentTypeEnumId == 'PcctCategoryName'})" />
             </if>
 
+            <if condition="nameContent?.contentLocation">
+                <then>
+                    <set field="categoryName" from="ec.resource.getLocationText(nameContent?.contentLocation, true)?:productCategory.categoryName" />
+                </then>
+                <else>
+                    <set field="categoryName" from="nameContent?.description?:productCategory.categoryName" />
+                </else>
+            </if>
             <if condition="!productCategory">
                 <return />
             </if>
 
             <service-call name="vsf.ProductServices.get#CategoryIdentification" out-map="catIdOut" in-map="[productCategoryId:productCategoryId]" />
-            <set field="categoryPath" from="[[productCategoryId:productCategoryId, categorySlug:catIdOut.categorySlug, categoryName: productCategoryLocalized?.description?:productCategory.categoryName]]" />
+            <set field="categoryPath" from="[[productCategoryId:productCategoryId, categorySlug:catIdOut.categorySlug, categoryName: categoryName]]" />
 
             <entity-find entity-name="mantle.product.category.ProductCategoryRollup" list="parentCategoryList" limit="1" cache="true">
                 <date-filter />
@@ -269,7 +277,7 @@ along with this software (see the LICENSE.md file). If not, see
             </entity-find>
 
             <if condition="parentCategoryList">
-                <service-call name="vsf.ProductServices.get#AncestorCategories" out-map="ancGetOut" out-map-add-to-existing="false" in-map="[productCategoryId:parentCategoryList[0].parentProductCategoryId]" />
+                <service-call name="vsf.ProductServices.get#AncestorCategories" out-map="ancGetOut" out-map-add-to-existing="false" in-map="[productCategoryId:parentCategoryList[0].parentProductCategoryId, locale:locale]" />
                 <!-- Push to begining of list -->
                 <script>if (ancGetOut.categoryPath) categoryPath = ancGetOut.categoryPath+categoryPath</script>
             </if>
@@ -401,16 +409,26 @@ along with this software (see the LICENSE.md file). If not, see
             Try to find ProductContent records of a specified product.
         </description>
         <in-parameters>
-            <parameter name="productId" required="true" />
+            <parameter name="productId" />
+            <parameter name="productIds" type="List" />
+            <parameter name="productContentTypeEnumId" />
+            <parameter name="productContentTypeEnumIds" type="List" />
             <parameter name="locale" />
         </in-parameters>
         <out-parameters>
             <parameter name="productContentList" />
         </out-parameters>
         <actions>
+            <if condition="!(productId || productIds)">
+                <return error="true" message="Product ID is required" />
+            </if>
+
             <entity-find entity-name="mantle.product.ProductContent" list="productContentList">
                 <date-filter />
-                <econdition field-name="productId" />
+                <econdition field-name="productId" ignore="productIds" />
+                <econdition field-name="productId" operator="in" from="productIds" ignore="productId" />
+                <econdition field-name="productContentTypeEnumId" ignore-if-empty="true" ignore="productContentTypeEnumIds" />
+                <econdition field-name="productContentTypeEnumId" operator="in" from="productContentTypeEnumIds" ignore-if-empty="true" ignore="productContentTypeEnumId" />
                 <select-field field-name="productContentId,productId,contentLocation,productContentTypeEnumId,fromDate,description,locale" />
                 <order-by field-name="sequenceNum,-fromDate" />
             </entity-find>
@@ -454,6 +472,7 @@ along with this software (see the LICENSE.md file). If not, see
         </in-parameters>
         <out-parameters>
             <parameter name="productAvailability" type="Map" />
+            <parameter name="productStock" type="Map" />
         </out-parameters>
         <actions>
             <entity-find-one entity-name="mantle.product.store.ProductStore" value-field="productStore" />
@@ -477,9 +496,11 @@ along with this software (see the LICENSE.md file). If not, see
                 <select-field field-name="availableToPromiseTotal" />
             </entity-find>
             <set field="productAvailability" from="[:]" />
+            <set field="productStock" from="[:]" />
             <iterate list="productAssetSumList" entry="assetSum">
                 <script>
                     productAvailability.put(assetSum.productId, assetSum.availableToPromiseTotal>0)
+                    productStock.put(assetSum.productId, assetSum.availableToPromiseTotal)
                 </script>
             </iterate>
         </actions>
@@ -504,6 +525,8 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="productName" />
             <parameter name="productTypeEnumId" />
             <parameter name="ownerPartyId" />
+            <parameter name="minimalPrice" type="BigDecimal" />
+            <parameter name="maximalPrice" type="BigDecimal" />
             <parameter name="price" type="BigDecimal" />
             <parameter name="listPrice" type="BigDecimal" />
             <parameter name="priceUomId" />
@@ -563,6 +586,16 @@ along with this software (see the LICENSE.md file). If not, see
                     <parameter name="isReadyForSales" type="Boolean" />
                     <parameter name="salesDates" />
                     <parameter name="features" type="Map" />
+                    <parameter name="isProductAvailable" type="Boolean" />
+                    <parameter name="productStock" type="BigDecimal" />
+                    <parameter name="dimensionList" type="List">
+                        <parameter name="dimension" type="Map">
+                            <parameter name="dimenstionType" />
+                            <parameter name="value" />
+                            <parameter name="uomDescription" />
+                            <parameter name="uomAbbreviation" />
+                        </parameter>
+                    </parameter>
                 </parameter>
             </parameter>
             <parameter name="availableFeatures" type="Map">
@@ -586,24 +619,14 @@ along with this software (see the LICENSE.md file). If not, see
                 <parameter name="salesIntroDate" />
                 <parameter name="salesDiscontinueDate" />
             </parameter>
+            <parameter name="isProductAvailable" type="Boolean" />
+            <parameter name="productStock" type="BigDecimal" />
         </out-parameters>
         <actions>
             <!-- find locale from request cookies -->
-            <!-- vsf uses a cookie named vsf-locale -->
-            <set field="locale" value="en_US" />
-            <script>
-                import javax.servlet.http.Cookie
-                Cookie[] cookies = ec.web.request.getCookies()
-                if (cookies != null) {
-                    for (int i = 0; i &lt; cookies.length; i++) {
-                        if (cookies[i].getName().equals("vsf-locale")) {
-                            locale = cookies[i].getValue()
-                            break
-                        }
-                    }
-                }
-            </script>
-
+            <service-call name="vsf.UtilServices.get#LocaleFromCookies" out-map="context" />
+            <script>Locale localeL = Locale.forLanguageTag(locale)</script>
+            <log message="localL: ${localeL}" />
             <!-- find store -->
             <entity-find-one entity-name="mantle.product.store.ProductStore" value-field="productStore" cache="true" />
             <if condition="!priceUomId">
@@ -620,7 +643,10 @@ along with this software (see the LICENSE.md file). If not, see
             <if condition="(product == null) || (product.ownerPartyId != vendorPartyId)">
                 <return error="true" message="Product not found with ID ${productId}" />
             </if>
-
+            
+            <if condition="product.statusId != 'PrdActive'">
+                <return error="true" message="Product not found with ID ${productId}" />
+            </if>
             <script>
                 context.putAll([
                     productId: product.productId,    
@@ -657,8 +683,8 @@ along with this software (see the LICENSE.md file). If not, see
                         standardFeatureList.add([
                             productFeatureId: standardFeature.productFeatureId,
                             productFeatureTypeEnumId: standardFeature.productFeatureTypeEnumId,
-                            typeDescription: standardFeature.typeDescription,
-                            description: standardFeature.description,
+                            typeDescription: ec.l10n.localize(standardFeature.typeDescription,localeL),
+                            description: ec.l10n.localize(standardFeature.description,localeL),
                         ])
                     ]]>
                 </script>
@@ -667,6 +693,7 @@ along with this software (see the LICENSE.md file). If not, see
             <!-- find dimensions -->
             <entity-find entity-name="mantle.product.ProductUomDimensionAndType" list="uomDimensionList" cache="true">
                 <econdition field-name="productId" />
+                <econdition field-name="uomDimensionTypeId" operator="not-in" value="ShippingWeight,ShippingLength,ShippingWidth,ShippingHeight" />
                 <order-by field-name="description" />
             </entity-find>
             <set field="dimensionList" from="[]" />
@@ -674,10 +701,10 @@ along with this software (see the LICENSE.md file). If not, see
                 <script>
                     <![CDATA[ 
                         dimensionList.add([
-                            dimensionType: uomDimension.description,
+                            dimensionType:  ec.l10n.localize(uomDimension.description,localeL),
                             value: uomDimension.value,
-                            uomDescription: uomDimension.uomDescription,
-                            uomAbbreviation: uomDimension.uomAbbreviation,
+                            uomDescription:  ec.l10n.localize(uomDimension.uomDescription,localeL),
+                            uomAbbreviation: ec.l10n.localize(uomDimension.uomAbbreviation,localeL)
                         ])
                     ]]>
                 </script>
@@ -709,7 +736,14 @@ along with this software (see the LICENSE.md file). If not, see
 
             <!-- Find product name -->
             <set field="nameContent" from="productContentList.find({ it.productContentTypeEnumId == 'PcntProductName'})" />
-            <set field="productName" from="nameContent?.description?:product.productName" />
+            <if condition="nameContent?.contentLocation">
+                <then>
+                    <set field="productName" from="ec.resource.getLocationText(nameContent?.contentLocation, true)?:product.productName" />
+                </then>
+                <else>
+                    <set field="productName" from="nameContent?.description?:product.productName" />
+                </else>
+            </if>
 
             <!-- Find product description (small) -->
             <set field="descriptionContent" from="productContentList.find({ it.productContentTypeEnumId == 'PcntDescription'})" />
@@ -729,25 +763,9 @@ along with this software (see the LICENSE.md file). If not, see
                     <set field="descriptionLong" from="ec.resource.getLocationText(descriptionLongContent?.contentLocation, true)" />
                 </then>
                 <else>
-                    <set field="descriptionLong" from="descriptionLongContent?.description?:product.description" />
+                    <set field="descriptionLong" from="descriptionLongContent?.description?:descriptionSmall" />
                 </else>
             </if>
-
-            <!-- Find images -->
-            <set field="imageList" from="[]" />
-            <iterate list="productContentList?.findAll( { it.productContentTypeEnumId in ['PcntImageSmall','PcntImageMedium','PcntImageLarge']} )" entry="productContent">
-                <if condition="productContent.productContentTypeEnumId in ['PcntImageSmall','PcntImageMedium','PcntImageLarge']">
-                    <set field="urlRegexPattern" from="/(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s]{2,}|www\.[a-zA-Z0-9]+\.[^\s]{2,})/" />
-                    <if condition="productContent.contentLocation.matches(urlRegexPattern)">
-                        <!-- Content is a static url -->
-                        <script>imageList.add([small:productContent.contentLocation,medium:productContent.contentLocation,large:productContent.contentLocation])</script>
-                        <else>
-                            <set field="imageUrl" value="${hostName}/store/content/productImage/${productContent.productContentId}" />
-                            <script>imageList.add([small:imageUrl,medium:imageUrl,large:imageUrl])</script>
-                        </else>
-                    </if>
-                </if>
-            </iterate>
 
             <!-- calculate review rating -->
             <set field="productRating" from="0" />
@@ -775,13 +793,48 @@ along with this software (see the LICENSE.md file). If not, see
 
             <!-- Find variant display info -->
             <set field="hasVariants" from="(product.productTypeEnumId=='PtVirtual')" />
-            <service-call name="vsf.ProductServices.get#ProductVariantsDisplayInfo" out-map="productVariantOut" in-map="[productId:productId, locale:locale]" />
+            <service-call name="vsf.ProductServices.get#ProductVariantsDisplayInfo" out-map="productVariantOut" in-map="[productId:productId, productStoreId:productStoreId, productContentList:productContentList, locale:locale]" />
 
-            <set field="variantOptions" from="productVariantOut?.variantOptions" />
-            <set field="availableFeatures" from="productVariantOut?.productFeatureMap" />
             <if condition="hasVariants">
+                <set field="variantOptions" from="productVariantOut?.variantOptions" />
+                <set field="availableFeatures" from="productVariantOut?.productFeatureMap" />
                 <set field="defaultVariant" from="[id:productVariantOut?.variantOptions[0]?.productId,slug:productVariantOut?.variantOptions[0]?.productSlug]" />
+
+                <set field="priceUomId" from="productVariantOut.priceUomId" />
+                <else>
+                    <service-call name="vsf.ProductServices.find#ProductAvailability" out-map="productAvailOut" in-map="[productId:productId, productStoreId:productStoreId]" />
+                    <set field="isProductAvailable" from="(!'Y'.equals(productStore.requireInventory) || productAvailOut?.productAvailability[productId])?:false" />
+                    <set field="productStock" from="productAvailOut?.productStock[productId]?:0" />
+                </else>
             </if>
+
+            <set field="minimalPrice" from="productVariantOut.minimalPrice" />
+            <set field="maximalPrice" from="productVariantOut.maximalPrice" />
+            <set field="isDiscounted" from="productVariantOut.isDiscounted" />
+
+            <!-- Find images -->
+            <set field="imageList" from="[]" />
+            <set field="productContentImageList" from="productContentList?.findAll( { it.productContentTypeEnumId in ['PcntImageSmall','PcntImageMedium','PcntImageLarge']})" />
+
+            <iterate list="productContentImageList" entry="productContent">
+                <if condition="productContent.productContentTypeEnumId in ['PcntImageSmall','PcntImageMedium','PcntImageLarge']">
+                    <set field="urlRegexPattern" from="/(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s]{2,}|www\.[a-zA-Z0-9]+\.[^\s]{2,})/" />
+                    <if condition="productContent.contentLocation.matches(urlRegexPattern)">
+                        <!-- Content is a static url -->
+                        <script>imageList.add([small:productContent.contentLocation,medium:productContent.contentLocation,large:productContent.contentLocation])</script>
+                        <else>
+                            <set field="imageUrl" value="${hostName}/store/content/productImage/${productContent.productContentId}" />
+                            <script>imageList.add([small:imageUrl,medium:imageUrl,large:imageUrl])</script>
+                        </else>
+                    </if>
+                </if>
+            </iterate>
+
+            <!-- if this is a virtual product & doesn't have content, get the content of virtual -->
+            <if condition="!imageList &amp;&amp; hasVariants">
+                <set field="imageList" from="productVariantOut?.variantOptions*.imageList?.flatten()" />
+            </if>
+
         </actions>
     </service>
 
@@ -803,10 +856,14 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="productSlug" />
             <parameter name="productSku" />
             <parameter name="productName" />
+            <parameter name="descriptionSmall" />
             <parameter name="productTypeEnumId" />
             <parameter name="ownerPartyId" />
             <parameter name="price" type="BigDecimal" />
             <parameter name="listPrice" type="BigDecimal" />
+            <parameter name="minimalPrice" type="BigDecimal" />
+            <parameter name="maximalPrice" type="BigDecimal" />
+            <parameter name="isDiscounted" type="Boolean" />
             <parameter name="priceUomId" />
             <parameter name="productClassDescription" />
             <parameter name="productRating" type="Float" />
@@ -834,10 +891,12 @@ along with this software (see the LICENSE.md file). If not, see
                 <parameter name="salesIntroDate" />
                 <parameter name="salesDiscontinueDate" />
             </parameter>
+            <parameter name="isProductAvailable" type="Boolean" />
+            <parameter name="productStock" type="BigDecimal" />
         </out-parameters>
         <actions>
+            <script>Locale localeL = Locale.forLanguageTag(locale)</script>
             <set field="found" from="true" />
-
             <!-- find store -->
             <entity-find-one entity-name="mantle.product.store.ProductStore" value-field="productStore" cache="true" />
             <if condition="!priceUomId">
@@ -891,8 +950,8 @@ along with this software (see the LICENSE.md file). If not, see
                         standardFeatureList.add([
                             productFeatureId: standardFeature.productFeatureId,
                             productFeatureTypeEnumId: standardFeature.productFeatureTypeEnumId,
-                            typeDescription: standardFeature.typeDescription,
-                            description: standardFeature.description,
+                            typeDescription: ec.l10n.localize(standardFeature.typeDescription, localeL),
+                            description: ec.l10n.localize(standardFeature.description, localeL),
                         ])
                     ]]>
                 </script>
@@ -909,23 +968,25 @@ along with this software (see the LICENSE.md file). If not, see
 
             <!-- find product name (localized) -->
             <set field="nameContent" from="productContentList.find({ it.productContentTypeEnumId == 'PcntProductName'})" />
-            <set field="productName" from="nameContent?.description?:productName" />
+            <if condition="nameContent?.contentLocation">
+                <then>
+                    <set field="productName" from="ec.resource.getLocationText(nameContent?.contentLocation, true)?:product.productName" />
+                </then>
+                <else>
+                    <set field="productName" from="nameContent?.description?:product.productName" />
+                </else>
+            </if>
 
-            <!-- Find images -->
-            <set field="imageList" from="[]" />
-            <iterate list="productContentList?.findAll( { it.productContentTypeEnumId in ['PcntImageSmall','PcntImageMedium','PcntImageLarge']} )" entry="productContent">
-                <if condition="productContent.productContentTypeEnumId in ['PcntImageSmall','PcntImageMedium','PcntImageLarge']">
-                    <set field="urlRegexPattern" from="/(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s]{2,}|www\.[a-zA-Z0-9]+\.[^\s]{2,})/" />
-                    <if condition="productContent.contentLocation?.matches(urlRegexPattern)">
-                        <!-- Content is a static url -->
-                        <script>imageList.add([small:productContent.contentLocation,medium:productContent.contentLocation,large:productContent.contentLocation])</script>
-                        <else>
-                            <set field="imageUrl" value="${hostName}/store/content/productImage/${productContent.productContentId}" />
-                            <script>imageList.add([small:imageUrl,medium:imageUrl,large:imageUrl])</script>
-                        </else>
-                    </if>
-                </if>
-            </iterate>
+            <!-- Find product description (small) -->
+            <set field="descriptionContent" from="productContentList.find({ it.productContentTypeEnumId == 'PcntDescription'})" />
+            <if condition="descriptionContent?.contentLocation">
+                <then>
+                    <set field="descriptionSmall" from="ec.resource.getLocationText(descriptionContent?.contentLocation, true)" />
+                </then>
+                <else>
+                    <set field="descriptionSmall" from="descriptionContent?.description?:product.description" />
+                </else>
+            </if>
 
             <!-- calculate review rating -->
             <set field="productRating" from="0" />
@@ -950,24 +1011,182 @@ along with this software (see the LICENSE.md file). If not, see
 
             <!-- Find variant display info -->
             <set field="hasVariants" from="(product.productTypeEnumId=='PtVirtual')" />
+            <service-call name="vsf.ProductServices.get#ProductVariantsBriefInfo" out-map="productVariantOut" in-map="[productId:productId, productStoreId:productStoreId, locale:locale]" />
+
             <if condition="hasVariants">
-                <entity-find entity-name="mantle.product.ProductAssoc" list="fromAssocs">
+                <set field="variantOptions" from="productVariantOut?.variantOptions" />
+                <set field="defaultVariant" from="[id:productVariantOut?.variantOptions[0]?.productId,slug:productVariantOut?.variantOptions[0]?.productSlug]" />
+
+                <set field="priceUomId" from="productVariantOut.priceUomId" />
+                <else>
+                    <service-call name="vsf.ProductServices.find#ProductAvailability" out-map="productAvailOut" in-map="[productId:productId, productStoreId:productStoreId]" />
+                    <set field="isProductAvailable" from="(!'Y'.equals(productStore.requireInventory) || productAvailOut?.productAvailability[productId])?:false" />
+                    <set field="productStock" from="productAvailOut?.productStock[productId]?:0" />
+                </else>
+            </if>
+
+            <set field="minimalPrice" from="productVariantOut.minimalPrice" />
+            <set field="maximalPrice" from="productVariantOut.maximalPrice" />
+            <set field="isDiscounted" from="productVariantOut.isDiscounted" />
+           
+            <!-- Find images -->
+            <set field="imageList" from="[]" />
+            <set field="productContentImageList" from="productContentList?.findAll( { it.productContentTypeEnumId in ['PcntImageSmall','PcntImageMedium','PcntImageLarge']})" />
+            
+            <!-- if this is a virtual product & doesn't have content, get the content of virtual -->
+            <if condition="!productContentImageList &amp;&amp; hasVariants">
+                <service-call name="vsf.ProductServices.find#ProductContentList" out-map="variantContentOut" in-map="[productIds:productVariantOut?.variantOptions*.productId, productContentTypeEnumIds:['PcntImageSmall','PcntImageMedium','PcntImageLarge']]" />
+                <set field="productContentImageList" from="variantContentOut.productContentList" />
+            </if>
+
+            <iterate list="productContentImageList" entry="productContent">
+                <if condition="productContent.productContentTypeEnumId in ['PcntImageSmall','PcntImageMedium','PcntImageLarge']">
+                    <set field="urlRegexPattern" from="/(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s]{2,}|www\.[a-zA-Z0-9]+\.[^\s]{2,})/" />
+                    <if condition="productContent.contentLocation.matches(urlRegexPattern)">
+                        <!-- Content is a static url -->
+                        <script>imageList.add([small:productContent.contentLocation,medium:productContent.contentLocation,large:productContent.contentLocation])</script>
+                        <else>
+                            <set field="imageUrl" value="${hostName}/store/content/productImage/${productContent.productContentId}" />
+                            <script>imageList.add([small:imageUrl,medium:imageUrl,large:imageUrl])</script>
+                        </else>
+                    </if>
+                </if>
+            </iterate>            
+        </actions>
+    </service>
+
+    <service verb="get" noun="ProductVariantsBriefInfo">
+        <description>
+            Finds variants of a Virtual Product
+        </description>
+        <in-parameters>
+            <parameter name="productStoreId" required="true" />
+            <parameter name="productId" required="true">
+                <description>Only id of a virtual product make sense to get relevant data.</description>
+            </parameter>
+            <parameter name="locale" />
+        </in-parameters>
+        <out-parameters>
+            <parameter name="variantOptions" type="List">
+                <description>
+                    A map where key is feature type (Enumeration) and value is another map
+                    with productId, description and price data exactly as it returned by get#ProductPrice.
+                </description>
+                <parameter name="variantOptionMap" type="Map">
+                    <parameter name="productId" />
+                    <parameter name="productSlug" />
+                    <parameter name="productName" />
+                    <parameter name="quantity" />
+                    <parameter name="prices" type="Map" />
+                    <parameter name="isReadyForSales" type="Boolean" />
+                    <parameter name="salesDates" />
+                    <parameter name="isProductAvailable" type="Boolean" />
+                    <parameter name="productStock" type="BigDecimal" />
+                </parameter>
+            </parameter>
+            <parameter name="priceUomId" />
+            <parameter name="minimalPrice" type="BigDecimal">
+                <description>Minimal price among all variants.</description>
+            </parameter>
+            <parameter name="maximalPrice" type="BigDecimal">
+                <description>Maximal price among all variants.</description>
+            </parameter>
+            <parameter name="isDiscounted" type="Boolean">
+                <description>We use this flag in UI to emphasis discounted products if they are variants</description>
+            </parameter>
+        </out-parameters>
+        <actions>
+            <script>Locale localeL = Locale.forLanguageTag(locale)</script>
+            <!-- Find product -->
+            <entity-find-one entity-name="mantle.product.Product" value-field="product" />
+            <entity-find-one entity-name="mantle.product.store.ProductStore" value-field="productStore" cache="true" />
+
+            <set field="variantOptions" type="List" from="[]" />
+            <set field="minimalPrice" type="BigDecimal" value="0" />
+            <set field="maximalPrice" type="BigDecimal" value="0" />
+            <set field="isDiscounted" type="Boolean" value="false" />
+
+            <!-- Get product price -->
+            <service-call name="mantle.product.PriceServices.get#ProductPrice" in-map="context" out-map="mainPriceSet" />
+
+            <!-- Make sure product is Virtual  -->
+            <if condition="product &amp;&amp; product.productTypeEnumId == 'PtVirtual'">
+                <!-- Find all product variants associated to current product -->
+                <entity-find entity-name="mantle.product.ProductAssocAndToFeatureAppl" list="assocs">
                     <econdition field-name="productAssocTypeEnumId" value="PatVariant" />
+                    <econdition field-name="applTypeEnumId" operator="in" value="PfatDistinguishing, PfatStandard" />
                     <econdition field-name="productId" from="product.productId" />
                     <date-filter />
-                    <order-by field-name="sequenceNum" />
                 </entity-find>
 
-                <if condition="fromAssocs">
-                    <set field="defaultVariantId" from="fromAssocs[0].toProductId" />
-                    <entity-find-one entity-name="mantle.product.ProductOtherIdentification" value-field="productVariantIdent">
-                        <field-map field-name="productId" from="defaultVariantId" />
-                        <field-map field-name="productIdTypeEnumId" value="PidtUrlSlug" />
-                    </entity-find-one>
-                    <set field="variantSlug" from="productVariantIdent?.idValue?:defaultVariantId" />
-                </if>
+                <set field="variantIdSet" from="new TreeSet(assocs*.toProductId)" />
 
-                <set field="defaultVariant" from="[id:hasVariants?defaultVariantId:productId,slug:hasVariants?variantSlug:productSlug]" />
+                <!-- Now prepare display info for each product variant -->
+                <iterate list="variantIdSet" entry="variantId">
+                    <entity-find-one entity-name="mantle.product.Product" value-field="productVariant" cache="true">
+                        <field-map field-name="productId" from="variantId" />
+                        <select-field field-name="statusId" />
+                    </entity-find-one>
+                    <if condition="productVariant.statusId != 'PrdActive'">
+                        <continue />
+                    </if>
+                    <!-- find variant price first -->
+                    <service-call name="mantle.product.PriceServices.get#ProductPrice" out-map="priceSet" in-map="context + [productId:variantId]" out-map-add-to-existing="false" />
+                    <service-call name="vsf.ProductServices.get#ProductIdentification" out-map="productSlugOut" in-map="[productId:variantId]" out-map-add-to-existing="false" />
+
+                    <!-- we return map keyed by feature type and should find the proper value for the assoc -->
+                    <set field="variantProductAssocList" from="assocs.findAll{it.toProductId == variantId}" />
+
+                    <!-- Find product quantity in stock -->
+                    <service-call name="vsf.ProductServices.get#ProductQuantity" out-map="productQuantity" in-map="[productId:variantId]" />
+                    <!-- find stock -->
+                    <service-call name="vsf.ProductServices.find#ProductAvailability" out-map="variantAvailOut" in-map="[productId:variantId, productStoreId:productStoreId]" out-map-add-to-existing="false" />
+                    <set field="isProductAvailable" from="(!'Y'.equals(productStore.requireInventory) || variantAvailOut?.productAvailability[variantId])?:false" />
+                    <set field="productStock" from="variantAvailOut?.productStock[variantId]?:0" />
+
+                    <script>
+                        <![CDATA[
+                            selectedPrices = (priceSet.price != null && priceSet != 0) ? priceSet : mainPriceSet
+                            
+                            // we use this flag in UI to emphasis discounted products but important to know if any of variants of discounted
+                            if (!isDiscounted) {
+                                isDiscounted = (selectedPrices.price && selectedPrices.listPrice) ? selectedPrices.price < selectedPrices.listPrice : false
+                            }
+
+                            variantOptions.add([
+                                productId: variantId, 
+                                productName: product.productName, 
+                                productSlug: productSlugOut?.productSlug,
+                                quantity: productQuantity.productQuantity,
+                                prices: selectedPrices, 
+                                isProductAvailable:isProductAvailable,
+                                productStock:productStock
+                            ])
+                            priceSet = null
+                        ]]>
+                    </script>
+                </iterate>
+
+                <!-- sort variants by price and store minimal price -->
+                <script>
+                    <![CDATA[
+                        Collections.sort(variantOptions, new Comparator<Map>() {
+                            int compare(Map m1, Map m2) {
+                                def price1 = m1.prices.price?:0
+                                def price2 = m2.prices.price?:0
+                                return price1.compareTo(price2)
+                            }
+                        })
+                        priceUomId = variantOptions?variantOptions.get(0).prices.priceUomId:'EGP'
+                        minimalPrice = variantOptions?variantOptions.get(0).prices.price:0.0
+                        maximalPrice = variantOptions?variantOptions.get(variantOptions.size() - 1).prices.price:0.0
+                    ]]>
+                </script>
+                <else>
+                    <set field="minimalPrice" type="BigDecimal" from="mainPriceSet.price" />
+                    <set field="maximalPrice" type="BigDecimal" from="mainPriceSet.price" />
+                    <set field="priceUomId" from="mainPriceSet.priceUomId" />
+                </else>
             </if>
         </actions>
     </service>
@@ -977,9 +1196,11 @@ along with this software (see the LICENSE.md file). If not, see
             Finds variants of a Virtual Product
         </description>
         <in-parameters>
+            <parameter name="productStoreId" required="true" />
             <parameter name="productId" required="true">
                 <description>Only id of a virtual product make sense to get relevant data.</description>
             </parameter>
+            <parameter name="productContentList" type="List" default="[]" />
             <parameter name="locale" />
         </in-parameters>
         <out-parameters>
@@ -1000,8 +1221,24 @@ along with this software (see the LICENSE.md file). If not, see
                     <parameter name="isReadyForSales" type="Boolean" />
                     <parameter name="salesDates" />
                     <parameter name="features" type="Map" />
+                    <parameter name="isProductAvailable" type="Boolean" />
+                    <parameter name="productStock" type="BigDecimal" />
+                    <parameter name="dimensionList" type="List">
+                        <parameter name="dimension" type="Map">
+                            <parameter name="dimenstionType" />
+                            <parameter name="value" />
+                            <parameter name="uomDescription" />
+                            <parameter name="uomAbbreviation" />
+                        </parameter>
+                    </parameter>
+                    <parameter name="imageList" type="List">
+                        <parameter name="small" type="Map" />
+                        <parameter name="medium" type="Map" />
+                        <parameter name="large" type="Map" />
+                    </parameter>
                 </parameter>
             </parameter>
+            <parameter name="priceUomId" />
             <parameter name="minimalPrice" type="BigDecimal">
                 <description>Minimal price among all variants.</description>
             </parameter>
@@ -1023,8 +1260,10 @@ along with this software (see the LICENSE.md file). If not, see
             </parameter>
         </out-parameters>
         <actions>
+            <script>Locale localeL = Locale.forLanguageTag(locale)</script>
             <!-- Find product -->
             <entity-find-one entity-name="mantle.product.Product" value-field="product" />
+            <entity-find-one entity-name="mantle.product.store.ProductStore" value-field="productStore" />
 
             <set field="variantOptions" type="List" from="[]" />
             <set field="minimalPrice" type="BigDecimal" value="0" />
@@ -1052,11 +1291,13 @@ along with this software (see the LICENSE.md file). If not, see
                     <!-- Find product variant -->
                     <entity-find-one entity-name="mantle.product.Product" value-field="productVariant">
                         <field-map field-name="productId" from="variantId" />
-                    </entity-find-one>
-
+                    </entity-find-one>                   
+                    <if condition="productVariant.statusId != 'PrdActive'">
+                        <continue />
+                    </if>
                     <!-- find variant price first -->
-                    <service-call name="mantle.product.PriceServices.get#ProductPrice" out-map="priceSet" in-map="context + [productId:variantId]" />
-                    <service-call name="vsf.ProductServices.get#ProductIdentification" out-map="productSlugOut" in-map="[productId:variantId]" />
+                    <service-call name="mantle.product.PriceServices.get#ProductPrice" out-map="priceSet" in-map="context + [productId:variantId]" out-map-add-to-existing="false" />
+                    <service-call name="vsf.ProductServices.get#ProductIdentification" out-map="productSlugOut" in-map="[productId:variantId]" out-map-add-to-existing="false" />
 
                     <!-- we return map keyed by feature type and should find the proper value for the assoc -->
                     <set field="variantProductAssocList" from="assocs.findAll{it.toProductId == variantId}" />
@@ -1073,10 +1314,10 @@ along with this software (see the LICENSE.md file). If not, see
                                 def featureSet = productFeatureMap.get(productFeatureTypeEnumId)
                                 if (!featureSet) {
                                     productFeatureMap.put(productFeatureTypeEnumId,[
-                                        label: productFeatureAndType.typeDescription,
+                                        label: ec.l10n.localize(productFeatureAndType.typeDescription, localeL),
                                         options: [
                                             [id:productFeatureAndType.productFeatureId,
-                                            label:productFeatureAndType.description, 
+                                            label: ec.l10n.localize(productFeatureAndType.description,localeL), 
                                             abbrev:productFeatureAndType.abbrev
                                             //price:selectedPrices  
                                         ]
@@ -1092,7 +1333,7 @@ along with this software (see the LICENSE.md file). If not, see
                                     if(!isItemInList) {
                                         featureSet.options.add([
                                             id:productFeatureAndType.productFeatureId,
-                                            label:productFeatureAndType.description, 
+                                            label:ec.l10n.localize(productFeatureAndType.description,localeL), 
                                             abbrev:productFeatureAndType.abbrev, 
                                             //price:selectedPrices
                                         ])
@@ -1102,18 +1343,90 @@ along with this software (see the LICENSE.md file). If not, see
                         </script>
                     </iterate>
 
+                    <!-- find dimensions -->
+                    <entity-find entity-name="mantle.product.ProductUomDimensionAndType" list="uomDimensionList" cache="true">
+                        <econdition field-name="productId" from="variantId" />
+                        <econdition field-name="uomDimensionTypeId" operator="not-equals" value="ShippingWeight" />
+                        <econdition field-name="uomDimensionTypeId" operator="not-equals" value="ShippingLength" />
+                        <econdition field-name="uomDimensionTypeId" operator="not-equals" value="ShippingWidth" />
+                        <econdition field-name="uomDimensionTypeId" operator="not-equals" value="ShippingHeight" />
+                        <order-by field-name="description" />
+                    </entity-find>
+                    <set field="dimensionList" from="[]" />
+                    <iterate list="uomDimensionList" entry="uomDimension">
+                        <script>
+                            <![CDATA[ 
+                                dimensionList.add([
+                                    dimensionType:  ec.l10n.localize(uomDimension.description,localeL),
+                                    value: uomDimension.value,
+                                    uomDescription:  ec.l10n.localize(uomDimension.uomDescription,localeL),
+                                    uomAbbreviation: ec.l10n.localize(uomDimension.uomAbbreviation,localeL)
+                                ])
+                            ]]>
+                        </script>
+                    </iterate>
+
                     <!-- Find product quantity in stock -->
-                    <service-call name="vsf.ProductServices.get#ProductQuantity" out-map="productQuantity" in-map="[productId:variantId]" />
+                    <service-call name="vsf.ProductServices.get#ProductQuantity" out-map="productQuantity" in-map="[productId:variantId]" out-map-add-to-existing="false" />
                     <!-- Find product sales dates -->
                     <service-call name="vsf.ProductServices.find#ProductSalesDates" out-map="context" in-map="[productId:variantId]" />
 
                     <!-- Find variant content -->
-                    <service-call name="vsf.ProductServices.find#ProductContentList" out-map="variantContent" in-map="[productId:variantId, locale:locale]" />
-                    <!-- Variant descriptions -->
-                    <set field="variantDescriptionContent" from="variantContent.productContentList.find({ it.productContentTypeEnumId == 'PcntDescription'})" />
-                    <set field="variantDescriptionLongContent" from="variantContent.productContentList.find({ it.productContentTypeEnumId == 'PcntDescriptionLong'})" />
-                    <set field="variantdescriptionSmall" from="variantDescriptionContent?.description?:productVariant.description" />
-                    <set field="variantDescriptionLong" from="variantDescriptionLongContent?.description?:productVariant.description" />
+                    <service-call name="vsf.ProductServices.find#ProductContentList" out-map="variantContent" in-map="[productId:variantId, locale:locale]" out-map-add-to-existing="false" />
+
+                    <!-- Find product name -->
+                    <set field="nameContent" from="variantContent.productContentList.find({ it.productContentTypeEnumId == 'PcntProductName'})?:productContentList.find({ it.productContentTypeEnumId == 'PcntProductName'})" />
+                    <if condition="nameContent?.contentLocation">
+                        <then>
+                            <set field="productName" from="ec.resource.getLocationText(nameContent?.contentLocation, true)?:productVariant.productName?:product.productName" />
+                        </then>
+                        <else>
+                            <set field="productName" from="nameContent?.description?:productVariant.productName?:product.productName" />
+                        </else>
+                    </if>
+
+                    <!-- Find product description (small) -->
+                    <set field="descriptionContent" from="variantContent.productContentList.find({ it.productContentTypeEnumId == 'PcntDescription'})?:productContentList.find({ it.productContentTypeEnumId == 'PcntDescription'})" />
+                    <if condition="descriptionContent?.contentLocation">
+                        <then>
+                            <set field="descriptionSmall" from="ec.resource.getLocationText(descriptionContent?.contentLocation, true)?:productVariant.description?:product.description" />
+                        </then>
+                        <else>
+                            <set field="descriptionSmall" from="descriptionContent?.description?:productVariant.description?:product.description" />
+                        </else>
+                    </if>
+
+                    <!-- Find product description (long) -->
+                    <set field="descriptionLongContent" from="variantContent.productContentList.find({ it.productContentTypeEnumId == 'PcntDescriptionLong'})?:productContentList.find({ it.productContentTypeEnumId == 'PcntDescriptionLong'})" />
+                    <if condition="descriptionLongContent?.contentLocation">
+                        <then>
+                            <set field="descriptionLong" from="ec.resource.getLocationText(descriptionLongContent?.contentLocation, true)?:descriptionSmall" />
+                        </then>
+                        <else>
+                            <set field="descriptionLong" from="descriptionLongContent?.description?:descriptionSmall" />
+                        </else>
+                    </if>
+
+                    <!-- Find images -->
+                    <set field="imageList" from="[]" />
+                    <iterate list="variantContent.productContentList?.findAll( { it.productContentTypeEnumId in ['PcntImageSmall','PcntImageMedium','PcntImageLarge']} )" entry="variantContent">
+                        <if condition="variantContent.productContentTypeEnumId in ['PcntImageSmall','PcntImageMedium','PcntImageLarge']">
+                            <set field="urlRegexPattern" from="/(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s]{2,}|www\.[a-zA-Z0-9]+\.[^\s]{2,})/" />
+                            <if condition="variantContent.contentLocation.matches(urlRegexPattern)">
+                                <!-- Content is a static url -->
+                                <script>imageList.add([small:variantContent.contentLocation,medium:variantContent.contentLocation,large:variantContent.contentLocation])</script>
+                                <else>
+                                    <set field="imageUrl" value="${hostName}/store/content/productImage/${variantContent.productContentId}" />
+                                    <script>imageList.add([small:imageUrl,medium:imageUrl,large:imageUrl])</script>
+                                </else>
+                            </if>
+                        </if>
+                    </iterate>
+
+                    <!-- find stock -->
+                    <service-call name="vsf.ProductServices.find#ProductAvailability" out-map="variantAvailOut" in-map="[productId:variantId, productStoreId:productStoreId]" out-map-add-to-existing="false" />
+                    <set field="isProductAvailable" from="(!'Y'.equals(productStore.requireInventory) || variantAvailOut?.productAvailability[variantId])?:false" />
+                    <set field="productStock" from="variantAvailOut?.productStock[variantId]?:0" />
 
                     <script>
                         <![CDATA[
@@ -1126,16 +1439,20 @@ along with this software (see the LICENSE.md file). If not, see
 
                             variantOptions.add([
                                 productId: variantId, 
-                                productName: product.productName, 
+                                productName: productName, 
                                 productSku: productSlugOut?.productSku,
                                 productSlug: productSlugOut?.productSlug,
-                                descriptionSmall: variantDescriptionSmall, 
-                                descriptionLong: variantDescriptionLong, 
+                                descriptionSmall: descriptionSmall, 
+                                descriptionLong: descriptionLong, 
                                 quantity: productQuantity.productQuantity,
                                 prices: selectedPrices, 
                                 isReadyForSales: isReadyForSales, 
                                 salesDates: salesDates, 
-                                features: featureMap
+                                features: featureMap,
+                                isProductAvailable:isProductAvailable,
+                                productStock:productStock,
+                                dimensionList:dimensionList,
+                                imageList:imageList,
                             ])
                             priceSet = null
                         ]]>
@@ -1152,13 +1469,15 @@ along with this software (see the LICENSE.md file). If not, see
                                 return price1.compareTo(price2)
                             }
                         })
-                        minimalPrice = variantOptions.get(0).prices.price
-                        maximalPrice = variantOptions.get(variantOptions.size() - 1).prices.price
+                        priceUomId = variantOptions?variantOptions.get(0).prices.priceUomId:'EGP'
+                        minimalPrice = variantOptions?variantOptions.get(0).prices.price:0.0
+                        maximalPrice = variantOptions?variantOptions.get(variantOptions.size() - 1).prices.price:0.0
                     ]]>
                 </script>
                 <else>
                     <set field="minimalPrice" type="BigDecimal" from="mainPriceSet.price" />
                     <set field="maximalPrice" type="BigDecimal" from="mainPriceSet.price" />
+                    <set field="priceUomId" from="mainPriceSet.priceUomId" />
                 </else>
             </if>
         </actions>
@@ -1171,6 +1490,7 @@ along with this software (see the LICENSE.md file). If not, see
         </description>
         <in-parameters>
             <parameter name="productCategoryId" required="true" />
+            <parameter name="productStoreId" />
             <parameter name="locale" />
         </in-parameters>
         <out-parameters>
@@ -1207,9 +1527,17 @@ along with this software (see the LICENSE.md file). If not, see
                     <econdition field-name="productCategoryId" />
                 </entity-find>
 
-                <set field="productCategoryLocalized" from="productCategoryContentList.find{it.categoryContentTypeEnumId == 'PcctCategoryName'}" />
+                <!-- Find product name -->
+                <set field="nameContent" from="productCategoryContentList.find({ it.categoryContentTypeEnumId == 'PcctCategoryName'})" />
+                <if condition="nameContent?.contentLocation">
+                    <then>
+                        <set field="categoryName" from="ec.resource.getLocationText(nameContent?.contentLocation, true)?:productCategory.categoryName" />
+                    </then>
+                    <else>
+                        <set field="categoryName" from="nameContent?.description?:productCategory.categoryName" />
+                    </else>
+                </if>
             </if>
-
 
             <!-- filter fields -->
             <script>
@@ -1217,7 +1545,7 @@ along with this software (see the LICENSE.md file). If not, see
                     productCategoryId: productCategory.productCategoryId,
                     pseudoId: productCategory.pseudoId,
                     categorySlug: categorySlug,
-                    categoryName: productCategoryLocalized?.description?:productCategory.categoryName,
+                    categoryName: categoryName,
                     description: productCategory.description
                 ])
             </script>
@@ -1231,7 +1559,14 @@ along with this software (see the LICENSE.md file). If not, see
 
             <set field="subCategoryList" from="[]" />
             <iterate list="rollupList" entry="rollup">
-                <service-call name="vsf.ProductServices.get#CategoryInfo" in-map="[productCategoryId:rollup.productCategoryId, locale:locale]" out-map="subProductCategory" />
+                <service-call name="vsf.ProductServices.get#CategoryInfo" in-map="[productCategoryId:rollup.productCategoryId, productStoreId:productStoreId, locale:locale]" out-map="subProductCategory" />
+                <entity-find-count entity-name="khms.product.category.ProductCategoryMemberProductStore" count-field="productCount">
+                    <econdition field-name="productCategoryId" from="rollup.productCategoryId" />
+                    <econdition field-name="productStoreId" />
+                </entity-find-count>
+                <if condition="!subProductCategory.subCategoryList &amp;&amp; !productCount">
+                    <continue />
+                </if>
                 <!-- <log level="warn" message="${productCategoryId} -> ${rollup.productCategoryId} -> ${subProductCategory}"/>-->
                 <!-- TODO: ProductCategoryContent for smallImageInfo -->
                 <script>
@@ -1262,7 +1597,7 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="orderBy" default-value="sequenceNum" />
             <parameter name="pageIndex" default="0" />
             <parameter name="pageSize" default="12" />
-            <parameter name="filters" />
+            <parameter name="filters" default="''"/>
         </in-parameters>
         <out-parameters>
             <parameter name="categoryTree" type="List">
@@ -1295,6 +1630,9 @@ along with this software (see the LICENSE.md file). If not, see
                     <parameter name="ownerPartyId" />
                     <parameter name="price" type="BigDecimal" />
                     <parameter name="listPrice" type="BigDecimal" />
+                    <parameter name="minimalPrice" type="BigDecimal" />
+                    <parameter name="maximalPrice" type="BigDecimal" />
+                    <parameter name="isDiscounted" type="Boolean" />
                     <parameter name="priceUomId" />
                     <parameter name="productClassDescription" />
                     <parameter name="descriptionLong" />
@@ -1323,6 +1661,8 @@ along with this software (see the LICENSE.md file). If not, see
                         <parameter name="salesIntroDate" />
                         <parameter name="salesDiscontinueDate" />
                     </parameter>
+                    <parameter name="isProductAvailable" type="Boolean" />
+                    <parameter name="productStock" type="BigDecimal" />
                 </parameter>
             </parameter>
             <parameter name="featureList" type="List">
@@ -1354,21 +1694,8 @@ along with this software (see the LICENSE.md file). If not, see
         </out-parameters>
         <actions>
             <!-- find locale from request cookies -->
-            <!-- vsf uses a cookie named vsf-locale -->
-            <set field="locale" value="en_US" />
-            <script>
-                import javax.servlet.http.Cookie
-                Cookie[] cookies = ec.web.request.getCookies()
-                if (cookies != null) {
-                    for (int i = 0; i &lt; cookies.length; i++) {
-                        if (cookies[i].getName().equals("vsf-locale")) {
-                            locale = cookies[i].getValue()
-                            break
-                        }
-                    }
-                }
-            </script>
-
+            <service-call name="vsf.UtilServices.get#LocaleFromCookies" out-map="context" />
+            <script>Locale localeL = Locale.forLanguageTag(locale)</script>
             <!-- Get category id/slug -->
             <service-call name="vsf.ProductServices.get#CategoryIdFromSlug" in-map="context" out-map="context" />
 
@@ -1403,32 +1730,16 @@ along with this software (see the LICENSE.md file). If not, see
             </script>
             <!-- get browseRootCategoryInfo for subCategoryList used in header, etc -->
             <if condition="browseRootCategoryId">
-                <service-call name="vsf.ProductServices.get#CategoryInfo" out-map="browseRootCategoryInfo" in-map="[productCategoryId:browseRootCategoryId, locale:locale]" />
+                <service-call name="vsf.ProductServices.get#CategoryInfo" out-map="browseRootCategoryInfo" in-map="[productCategoryId:browseRootCategoryId, productStoreId:productStoreId, locale:locale]" />
                 <set field="categoryTree" from="generateCategory(browseRootCategoryInfo)" />
             </if>
 
-            <!-- TODO Sorting doesnt work cuz we're querying productcategorymemeber -->
-            <set field="orderByMap" from="[            
-                'default': 'sequenceNum',
-                'name-desc': '-productName',
-                'name-asc': 'productName',
-                'price-asc': 'price-asc',
-                'price-desc': 'price-desc',
-                'popularity': 'popularity',
-            ]" />
-
-            <if condition="orderBy != 'sequenceNum'">
-                <if condition="orderByMap.containsKey(orderBy)">
-                    <set field="orderBy" from="orderByMap[orderBy]" />
-                    <else>
-                        <set field="orderBy" value="sequenceNum" />
-                    </else>
-                </if>
-            </if>
-            <entity-find entity-name="mantle.product.category.ProductCategoryRollup" list="childCategoryList">
+            <!-- <entity-find entity-name="mantle.product.category.ProductCategoryRollup" list="childCategoryList">
                 <date-filter />
                 <econdition field-name="parentProductCategoryId" from="productCategoryId" />
-            </entity-find>
+                <order-by field-name="sequenceNum" />
+            </entity-find> -->
+            <service-call name="vsf.ProductServices.get#CategoryDescendants" out-map="context" in-map="[productCategoryId:productCategoryId]" />
 
             <set field="shouldFilter" from="false" />
             <set field="productFeatureTypeEnumIds" type="List" from="[]" />
@@ -1456,13 +1767,14 @@ along with this software (see the LICENSE.md file). If not, see
                     <econdition field-name="applTypeEnumId" value="PfatStandard" />
                     <select-field field-name="productId" />
                 </entity-find>
-                <entity-find entity-name="mantle.product.category.ProductCategoryMember" list="filteredProductList">
+                <entity-find entity-name="khms.product.category.ProductCategoryMemberProductStore" list="filteredProductList">
                     <search-form-inputs paginate="true" default-order-by="${orderBy}" input-fields-map="[pageIndex:pageIndex, pageSize:pageSize]" />
                     <date-filter />
+                    <econdition field-name="productStoreId" />
                     <econdition field-name="productId" operator="in" from="filterPfaaList.productId" />
                     <econditions combine="or">
                         <econdition field-name="productCategoryId" />
-                        <econdition field-name="productCategoryId" operator="in" from="childCategoryList?.collect{it.productCategoryId}" ignore-if-empty="true" />
+                        <econdition field-name="productCategoryId" operator="in" from="categoryIdList" ignore-if-empty="true" />
                     </econditions>
                 </entity-find>
             </if>
@@ -1472,12 +1784,14 @@ along with this software (see the LICENSE.md file). If not, see
 
             <if condition="shouldFilter">
                 <!-- Don't worry about ordering or pagination if we're filtering... Main use of this list will be for product feature building -->
-                <entity-find entity-name="mantle.product.category.ProductCategoryMember" list="productList">
+                <entity-find entity-name="khms.product.category.ProductCategoryMemberProductStore" list="productList">
                     <date-filter />
                     <econditions combine="or">
                         <econdition field-name="productCategoryId" />
-                        <econdition field-name="productCategoryId" operator="in" from="childCategoryList?.collect{it.productCategoryId}" ignore-if-empty="true" />
+                        <econdition field-name="productCategoryId" operator="in" from="categoryIdList" ignore-if-empty="true" />
                     </econditions>
+                    <econdition field-name="productStoreId" />
+                    <order-by field-name="sequenceNum" />
                 </entity-find>
                 <!-- use pagination from filtered list -->
                 <set field="productListPageIndex" from="filteredProductListPageIndex" />
@@ -1492,14 +1806,26 @@ along with this software (see the LICENSE.md file). If not, see
                         all products since its paginated. Only features for the pageSize number of products will be built
                         This all needs to be moved to elastic search  
                     -->
-                    <entity-find entity-name="mantle.product.category.ProductCategoryMember" list="productList">
-                        <search-form-inputs paginate="true" default-order-by="${orderBy}" input-fields-map="[pageIndex:pageIndex, pageSize:pageSize]" />
+                    <entity-find entity-name="khms.product.category.ProductCategoryMemberProductStore" list="productList">
+                        <search-form-inputs paginate="true" input-fields-map="[pageIndex:pageIndex, pageSize:pageSize]" />
                         <date-filter />
                         <econditions combine="or">
                             <econdition field-name="productCategoryId" />
-                            <econdition field-name="productCategoryId" operator="in" from="childCategoryList?.collect{it.productCategoryId}" ignore-if-empty="true" />
+                            <econdition field-name="productCategoryId" operator="in" from="categoryIdList" ignore-if-empty="true" />
                         </econditions>
+                        <econdition field-name="productStoreId" />
+                        <order-by field-name="sequenceNum" />
                     </entity-find>
+
+                    <!-- <script>
+                        <![CDATA[ 
+                            def categoryOrder = childCategoryList?.collect{it.productCategoryId}
+                            productList.sort{ a,b ->{
+                                return categoryOrder.indexOf(a.productCategoryId) <=> categoryOrder.indexOf(b.productCategoryId)
+                            }
+                            }
+                        ]]>
+                    </script> -->
                 </else>
             </if>
             <!-- <service-call name="vsf.ProductServices.get#SortedProductList" in-map="[productCategoryId:productCategoryId, productStoreId:productStoreId, pageIndex:pageIndex, pageSize:pageSize, orderBy: orderBy]" out-map="context"/> -->
@@ -1522,6 +1848,40 @@ along with this software (see the LICENSE.md file). If not, see
                 </script>
             </iterate>
 
+            <!-- TODO Sorting doesnt work cuz we're querying productcategorymemeber -->
+            <set field="orderByMap" from="[            
+                'default': 'sequenceNum',
+                'name-desc': '-productName',
+                'name-asc': 'productName',
+                'price-asc': 'price-asc',
+                'price-desc': 'price-desc',
+                'popularity': 'popularity',
+            ]" />
+
+            <!-- <if condition="orderBy != 'sequenceNum'">
+                <if condition="orderByMap.containsKey(orderBy)">
+                    <set field="orderBy" from="orderByMap[orderBy]" />
+                    <else>
+                        <set field="orderBy" value="sequenceNum" />
+                    </else>
+                </if>
+            </if> -->
+            <log level="warn" message="orderBy ${orderBy}" />
+
+            <if condition="orderBy == 'name-desc'">
+                <then>
+                    <script>productList = productList.sort{it.productName}.reverse()</script>
+                </then>
+                <else-if condition="orderBy == 'name-asc'">
+                    <script>productList.sort{it.productName}</script>
+                </else-if>
+                <else-if condition="orderBy == 'price-asc'">
+                    <script>productList.sort{it.minimalPrice}</script>
+                </else-if>
+                <else-if condition="orderBy == 'price-desc'">
+                    <script>productList.sort{-it.minimalPrice}</script>
+                </else-if>
+            </if>
             <!-- add the related product features so we could filter by them -->
             <set field="featureList" from="[]" />
             <!-- create a new set of all product feature types (ex: PftSize, PftMaterial)-->
@@ -1537,7 +1897,7 @@ along with this software (see the LICENSE.md file). If not, see
                     <script>
                         featureOptions.add([
                             id: pf,
-                            label: pfaa.description,
+                            label: ec.l10n.localize(pfaa.description,localeL),
                             type: 'attribute_group',
                             count: pfaaList*.productFeatureId?.findAll{it == pf}.size()
                         ])</script>
@@ -1545,7 +1905,7 @@ along with this software (see the LICENSE.md file). If not, see
                 <script> 
                     featureList.add([
                         id: pfType,
-                        label: pfaa.typeDescription,
+                        label: ec.l10n.localize(pfaa.typeDescription,localeL),
                         type: 'checkbox',
                         shouldDisplay: true,
                         allowMultiple: true,
@@ -1553,7 +1913,6 @@ along with this software (see the LICENSE.md file). If not, see
                     ])
                 </script>
             </iterate>
-
         </actions>
     </service>
 
@@ -1605,20 +1964,8 @@ along with this software (see the LICENSE.md file). If not, see
         </out-parameters>
         <actions>
             <!-- find locale from request cookies -->
-            <!-- vsf uses a cookie named vsf-locale -->
-            <set field="locale" value="en_US" />
-            <script>
-                import javax.servlet.http.Cookie
-                Cookie[] cookies = ec.web.request.getCookies()
-                if (cookies != null) {
-                    for (int i = 0; i &lt; cookies.length; i++) {
-                        if (cookies[i].getName().equals("vsf-locale")) {
-                            locale = cookies[i].getValue()
-                            break
-                        }
-                    }
-                }
-            </script>
+            <service-call name="vsf.UtilServices.get#LocaleFromCookies" out-map="context" />
+
 
             <!-- find store -->
             <entity-find-one entity-name="mantle.product.store.ProductStore" value-field="productStore" cache="true" />
@@ -1633,13 +1980,14 @@ along with this software (see the LICENSE.md file). If not, see
                 <econdition field-name="storeCategoryTypeEnumId" value="PsctFeatured" />
             </entity-find>
 
-            <entity-find entity-name="mantle.product.category.ProductCategoryMember" list="featuredCatProductList" limit="10">
+            <entity-find entity-name="khms.product.category.ProductCategoryMemberProductStore" list="featuredCatProductList" limit="10">
 
                 <date-filter />
                 <econdition field-name="productCategoryId" operator="in" from="featuredCategoryList*.productCategoryId" />
+                <econdition field-name="productStoreId" />
             </entity-find>
 
-            <log level="warn" message="orderBy ${orderBy} ProductServices productList?.sequenceNum ${productList?.sequenceNum}" />
+            <!-- <log level="warn" message="orderBy ${orderBy} ProductServices productList?.sequenceNum ${productList?.sequenceNum}" /> -->
 
             <set field="productList" from="[]" />
             <iterate list="featuredCatProductList" entry="featuredCatProduct">
@@ -1703,20 +2051,7 @@ along with this software (see the LICENSE.md file). If not, see
         </out-parameters>
         <actions>
             <!-- find locale from request cookies -->
-            <!-- vsf uses a cookie named vsf-locale -->
-            <set field="locale" value="en_US" />
-            <script>
-                import javax.servlet.http.Cookie
-                Cookie[] cookies = ec.web.request.getCookies()
-                if (cookies != null) {
-                    for (int i = 0; i &lt; cookies.length; i++) {
-                        if (cookies[i].getName().equals("vsf-locale")) {
-                            locale = cookies[i].getValue()
-                            break
-                        }
-                    }
-                }
-            </script>
+            <service-call name="vsf.UtilServices.get#LocaleFromCookies" out-map="context" />
 
             <!-- find store -->
             <entity-find-one entity-name="mantle.product.store.ProductStore" value-field="productStore" cache="true" />
@@ -1735,21 +2070,24 @@ along with this software (see the LICENSE.md file). If not, see
                 <return error="true" message="Product not found with ID ${productId}" />
             </if>
 
-            <entity-find entity-name="mantle.product.category.ProductCategoryMember" list="relatedProductCategories">
+            <entity-find entity-name="khms.product.category.ProductCategoryMemberProductStore" list="relatedProductCategories">
                 <date-filter />
                 <econdition field-name="productId" />
+                <econdition field-name="productStoreId" />
             </entity-find>
 
             <!--  -->
-            <log message="Matched categories: ${relatedProductCategories*.productCategoryId}" />
+            <!-- <log message="Matched categories: ${relatedProductCategories*.productCategoryId}" /> -->
             <!-- get entire cached list then paginate, for huge numbers of products in a category this is a bad approach (such sites should probably be purely search based) -->
             <!-- use the name 'productList' so pagination out-parameters are created automatically -->
-            <entity-find entity-name="mantle.product.category.ProductCategoryMember" list="relatedCatProductsList" limit="10">
+            <entity-find entity-name="khms.product.category.ProductCategoryMemberProductStore" list="relatedCatProductsList" limit="10">
                 <date-filter />
+                <econdition field-name="productId" operator="not-equals" />
                 <econdition field-name="productCategoryId" operator="in" from="relatedProductCategories*.productCategoryId" />
+                <econdition field-name="productStoreId" />
             </entity-find>
 
-            <log level="warn" message="orderBy ${orderBy} ProductServices productList?.sequenceNum ${productList?.sequenceNum}" />
+            <!-- <log level="warn" message="orderBy ${orderBy} ProductServices productList?.sequenceNum ${productList?.sequenceNum}" /> -->
 
             <set field="productList" from="[]" />
             <iterate list="relatedCatProductsList" entry="relatedCatProduct">

@@ -2,7 +2,7 @@
 <!--
 (C) 2022, Gorilla Systems
 -->
-<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-2.1.xsd">
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
 
     <!-- ===================================================== -->
     <!-- ========== Store Services ========== -->
@@ -72,6 +72,7 @@
                     <parameter name="id" type="String" />
                     <parameter name="slug" type="String" />
                     <parameter name="label" type="String" />
+                    <parameter name="items" type="List" />
                 </parameter>
             </parameter>
             <parameter name="countryList" type="List">
@@ -90,21 +91,7 @@
         </out-parameters>
         <actions>
             <!-- get locale -->
-            <set field="locale" value="en" />
-            <script>
-                import javax.servlet.http.Cookie
-                Cookie[] cookies = ec.web.request.getCookies()
-                println cookies
-                if (cookies != null) {
-                    for (int i = 0; i &lt; cookies.length; i++) {
-                        println 'cookie' + cookies[i].getName()
-                        if (cookies[i].getName().equals("vsf-locale")) {
-                            locale = cookies[i].getValue()
-                            break
-                        }
-                    }
-                }
-            </script>
+            <service-call name="vsf.UtilServices.get#LocaleFromCookies" out-map="context" />
 
             <!-- Attempt to get product store from session attributes -->
             <if condition="ec.web.sessionAttributes?.productStoreId">
@@ -148,14 +135,18 @@
 
             <!-- Build category list -->
             <iterate list="childCategoryList" entry="category">
-                <entity-find-one entity-name="mantle.product.category.ProductCategory" value-field="productCategory">
-                    <field-map field-name="productCategoryId" from="category.productCategoryId" />
-                </entity-find-one>
+                <service-call name="vsf.ProductServices.get#CategoryInfo" in-map="[productCategoryId:category.productCategoryId, productStoreId:productStoreId, locale:locale]" out-map="productCategoryInfo" out-map-add-to-existing="false" />
                 <script>
                     menuCategoryList.add([
-                        id: productCategory?.productCategoryId,
-                        slug: productCategory?.identifications?.find{it.identTypeEnumId == 'PcitUrlSlug'}?.idValue ?: productCategory?.productCategoryId,
-                        label: (local!='en')?(productCategory?.contents?.find{ (it.locale == locale) &amp;&amp; (it.categoryContentTypeEnumId=='PcctCategoryName')}?.description?:productCategory?.categoryName):(productCategory?.categoryName)
+                        id: productCategoryInfo?.productCategoryId,
+                        slug: productCategoryInfo?.categorySlug?:productCategoryInfo?.productCategoryId,
+                        label: productCategoryInfo?.categoryName,
+                        items: productCategoryInfo?.subCategoryList.collect{it -> [
+                            id: it.pseudoId?:it.productCategoryId, 
+                            slug: it.categorySlug?:it.pseudoId?:it.productCategoryId,
+                            label: it.categoryName, 
+                            items: it.subCategoryList  
+                        ]}
                     ]);
                 </script>
             </iterate>
@@ -168,7 +159,7 @@
                 <order-by field-name="geoName" />
             </entity-find>
 
-            <set field="countryList" from="geoList.collect{[geoId: it.geoId, geoName: it.geoName]}" type="List" />
+            <set field="countryList" from="geoList.collect{[geoId: it.geoId, geoName: it.geoName, geoCodeAlpha2:it.geoCodeAlpha2]}" type="List" />
             <entity-find entity-name="moqui.basic.Geo" list="geoList">
                 <econdition field-name="geoTypeEnumId" value="GEOT_COUNTRY" />
                 <order-by field-name="geoName" />
@@ -182,7 +173,8 @@
                     <script>
                         regionList.add([
                             geoId: region.geoId,
-                            geoName: region.geoName
+                            geoName: region.geoName,
+                            geoCodeAlpha2: region.geoCodeAlpha2
                         ])
                     </script>
                 </iterate>
@@ -194,15 +186,39 @@
     </service>
 
     <service verb="get" noun="Geos">
+        <in-parameters>
+            <parameter name="parentGeoId" />
+        </in-parameters>
         <out-parameters>
             <parameter name="geoList" />
         </out-parameters>
         <actions>
-            <entity-find entity-name="moqui.basic.Geo" list="geoList">
-                <econdition field-name="geoTypeEnumId" value="GEOT_COUNTRY" />
-                <econdition field-name="geoId" value="EGY" />
+            <service-call name="vsf.UtilServices.get#LocaleFromCookies" out-map="context" />
+
+            <if condition="parentGeoId">
+                <entity-find entity-name="moqui.basic.GeoAssoc" list="geoAssocList">
+                    <econdition field-name="geoId" from="parentGeoId" />
+                    <econdition field-name="geoAssocTypeEnumId" value="GAT_REGIONS" />
+                    <order-by field-name="toGeoId" />
+                </entity-find>
+            </if>
+            <entity-find entity-name="moqui.basic.Geo" list="geoListRaw">
+                <econdition field-name="geoTypeEnumId" value="GEOT_COUNTRY" ignore="parentGeoId" />
+                <econdition field-name="geoId" value="EGY" ignore="parentGeoId" />
+                <econdition field-name="geoId" operator="in" from="geoAssocList*.toGeoId" ignore="!parentGeoId" />
                 <order-by field-name="geoName" />
             </entity-find>
+            <set field="geoList" from="[]" />
+            <iterate list="geoListRaw" entry="geoRaw">
+                <script>        
+                    def geoName = geoRaw.geoName
+                    if (locale == 'ar'){
+                        geoName = geoRaw.geoNameLocal?:geoRaw.geoName
+                    }
+                    
+                    geoList.add([geoId: geoRaw.geoId, geoName: geoName, geoCodeAlpha2:geoRaw.geoCodeAlpha2])
+                </script>
+            </iterate>
         </actions>
     </service>
 

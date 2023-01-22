@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+(C) 2022, Gorilla Systems
+-->
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <!-- ===================================================== -->
+    <!-- ========== Util Services ========== -->
+    <!-- =====================================================-->
+    <!-- Contents 
+        [1] get#LocaleFromCookies......[OK]
+    -->
+
+    <service verb="get" noun="LocaleFromCookies">
+        <out-parameters>
+            <parameter name="locale" />
+        </out-parameters>
+        <actions>
+            <set field="locale" value="en" />
+            <set field="country" value="" />
+            <script>
+                import javax.servlet.http.Cookie
+                Cookie[] cookies = ec.web.request.getCookies()
+                if (cookies != null) {
+                    for (int i = 0; i &lt; cookies.length; i++) {
+                        if (cookies[i].getName().equals("vsf-locale")) {
+                            locale = cookies[i].getValue()
+                        }
+                        if (cookies[i].getName().equals("vsf-country")) {
+                            country = cookies[i].getValue()
+                        }
+                    }
+                }
+                <!-- if (ec.user){
+                    ec.user.setLocale(new Locale(locale, country))
+                } -->
+            </script>
+        </actions>
+        
+    </service>
+</services>
