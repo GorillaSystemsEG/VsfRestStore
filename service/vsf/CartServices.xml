@@ -230,12 +230,13 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="productStoreId" />
             <parameter name="cartOrderId" />
             <parameter name="customerPartyId" />
+            <parameter name="locale" />
         </out-parameters>
         <actions>
+            <service-call name="vsf.UtilServices.get#LocaleFromCookies" out-map="context" />
             <!-- NOTE: use the web session for attributes such as cartOrderId for security; this won't work in a stateless mode or outside a web session -->
             <set field="sessionAttributes" from="ec.web.sessionAttributes" />
             <set field="cartOrderId" from="sessionAttributes.cartOrderId" />
-
             <if condition="sessionAttributes.productStoreId">
                 <set field="productStoreId" from="sessionAttributes.productStoreId" />
             </if>
@@ -256,7 +257,21 @@ along with this software (see the LICENSE.md file). If not, see
                 <if condition="existingOrderPartList">
                     <set field="cartOrderId" from="existingOrderPartList[0].orderId" />
                     <set field="sessionAttributes.cartOrderId" from="cartOrderId" />
+                    
                 </if>
+                <else-if condition="cartOrderId &amp;&amp; customerPartyId">
+                    <entity-find entity-name="mantle.order.OrderHeaderAndPart" list="existingOrderPartList">
+                        <econdition field-name="statusId" value="OrderOpen" />
+                        <econdition field-name="customerPartyId" />
+                        <select-field field-name="orderId" />
+                        <select-field field-name="orderPartSeqId" />
+                        <order-by field-name="-entryDate" /> <!-- get most recent open order -->
+                    </entity-find>
+                    <if condition="!existingOrderPartList">
+                        <set field="cartOrderId" from="null" />
+                        <set field="sessionAttributes.cartOrderId" from="cartOrderId" />
+                    </if>
+                </else-if>
             </if>
         </actions>
     </service>
@@ -304,12 +319,19 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="orderId" required="true" />
         </in-parameters>
         <actions>
+            <service-call name="vsf.UtilServices.get#LocaleFromCookies" out-map="context" />
+            <script>Locale localeL = Locale.forLanguageTag(locale)</script>
+
             <!-- find order header -->
             <entity-find-one entity-name="mantle.order.OrderHeader" value-field="orderHeaderRaw">
-                <select-field field-name="orderId,externalId,currencyUomId,entryDate,placedDate,statusId,grandTotal" />
+                <select-field field-name="orderId,externalId,currencyUomId,entryDate,placedDate,statusId,grandTotal,salesChannelEnumId" />
             </entity-find-one>
             <if condition="orderHeaderRaw == null">
                 <return message="Order not found with ID ${orderId}" public="true" type="danger" />
+            </if>
+            <!-- verify cart hasn't been placed -->
+            <if condition="orderHeaderRaw?.salesChannelEnumId != 'ScWeb'">
+                <return />
             </if>
             <script>
                 <![CDATA[
@@ -327,6 +349,7 @@ along with this software (see the LICENSE.md file). If not, see
             <!-- find order parts -->
             <entity-find entity-name="mantle.order.OrderPart" list="orderPartList">
                 <econdition field-name="orderId" />
+                <econdition field-name="statusId" value="OrderOpen" />
                 <select-field field-name="orderPartSeqId,telecomContactMechId,postalContactMechId,carrierPartyId,shipmentMethodEnumId,shippingInstructions,statusId,partTotal" />
                 <order-by field-name="orderPartSeqId" />
             </entity-find>
@@ -399,15 +422,44 @@ along with this software (see the LICENSE.md file). If not, see
                 <![CDATA[
                     // Transform entity value to DTO
                     def transformOrderItemOther(orderItem) {
+                        def orderItemTotals = getOrderItemTotalWithChildren(orderItem, null, false)
                         return [
-                            orderItemSeqId: orderItemRaw.orderItemSeqId, 
-                            parentItemSeqId: orderItemRaw.parentItemSeqId,
-                            itemDescription: orderItemRaw.itemDescription,
-                            quantity: orderItemRaw.quantity,
-                            unitAmount: orderItemRaw.unitAmount,
-                            unitListPrice: orderItemRaw.unitListPrice
+                            orderItemSeqId: orderItem.orderItemSeqId, 
+                            parentItemSeqId: orderItem.parentItemSeqId,
+                            itemDescription: orderItem.itemDescription,
+                            quantity: orderItem.quantity,
+                            //unitAmount: orderItem.unitAmount,
+                            //unitListPrice: orderItem.unitListPrice,
+                            unitAmount: orderItemTotals.orderItemUnitTotal,
+                            unitListPrice: orderItemTotals.orderItemUnitListTotal
                         ]
                     }
+
+                    def getOrderItemTotalWithChildren(orderItem, orderItemUnitListRatio, proRate) {
+                        def orderItemUnitTotal = orderItem.unitAmount
+                        def orderItemUnitListTotal = orderItem.unitListPrice?:orderItemUnitTotal
+                        if (proRate)
+                            orderItemUnitListRatio = (orderItemUnitListTotal).divide(orderItemUnitTotal as BigDecimal, 3, BigDecimal.ROUND_HALF_UP)
+
+                        if (orderItem.orderItemSeqId in orderItemWithChildrenSet){
+                            def childrenListRaw = orderItemListRaw.findAll{ it.parentItemSeqId == orderItem.orderItemSeqId && !discountItems.contains(it.itemTypeEnumId) }
+                            childrenListRaw.forEach {childItemRaw -> {
+                                if (taxItems.contains(childItemRaw.itemTypeEnumId) || discountItems.contains(childItemRaw.itemTypeEnumId)){
+                                    def orderItemTotals = getOrderItemTotalWithChildren(childItemRaw, orderItemUnitListRatio, false)
+                                    //def unitTaxAmount = ((orderItem.quantity > 1)?(orderItemTotals.orderItemUnitTotal?:0).divide(orderItem.quantity as BigDecimal, 3, BigDecimal.ROUND_HALF_UP):orderItemTotals.orderItemUnitTotal)?:0
+                                    def unitTaxAmount = (orderItemTotals.orderItemUnitTotal?:0).divide(orderItem.quantity as BigDecimal, 3, BigDecimal.ROUND_HALF_UP)
+                                    orderItemUnitTotal += unitTaxAmount
+                                    orderItemUnitListTotal += unitTaxAmount * (orderItemUnitListRatio?:1.0)
+                                } else {
+                                    def orderItemTotals = getOrderItemTotalWithChildren(childItemRaw, orderItemUnitListRatio, false)
+                                    orderItemUnitTotal += orderItemTotals.orderItemUnitTotal?:0
+                                    orderItemUnitListTotal += orderItemTotals.orderItemUnitListTotal?:0
+                                }
+                            }}
+                        }
+                        return [orderItemUnitTotal:orderItemUnitTotal, orderItemUnitListTotal:orderItemUnitListTotal]
+                    }
+
                 ]]>
             </script>
             <iterate list="orderItemListRaw" entry="orderItemRaw">
@@ -438,6 +490,9 @@ along with this software (see the LICENSE.md file). If not, see
                     </if>
 
                     <if condition="orderItemRaw.productId">
+                        <set field="virtualProductId" from="null" />
+                        <set field="isVariant" from="null" />
+
                         <!-- If this order item is a product variant, get parent product (virtual) -->
                         <entity-find entity-name="mantle.product.ProductAssoc" list="productAssocs" limit="1">
                             <date-filter />
@@ -445,6 +500,7 @@ along with this software (see the LICENSE.md file). If not, see
                             <econdition field-name="toProductId" from="orderItemRaw.productId" />
                             <order-by field-name="sequenceNum" />
                         </entity-find>
+
                         <set field="isVariant" from="productAssocs.size()" />
                         <if condition="isVariant">
                             <set field="virtualProductId" from="productAssocs[0].productId" />
@@ -461,17 +517,48 @@ along with this software (see the LICENSE.md file). If not, see
 
                         <script>
                             <![CDATA[
-                                featureList.each{ feature -> variantFeatures.put(feature.typeDescription, feature.description) }
+                                featureList.each{ feature -> variantFeatures.put(ec.l10n.localize(feature.typeDescription,localeL), ec.l10n.localize(feature.description,localeL)) }
                             ]]>
                         </script>
 
-                        <!-- Find cover image -->
                         <!-- TODO: Use the cover image content type -->
-                        <service-call name="vsf.ProductServices.find#ProductContent" in-map="[productId:orderItemRaw.productId, productContentTypeEnumId:'PcntImageMedium']" out-map="productContentOut" out-map-add-to-existing="false" />
-                    </if>
+                        <!-- <service-call name="vsf.ProductServices.find#ProductContent" in-map="[productId:orderItemRaw.productId, productContentTypeEnumId:'PcntImageMedium']" out-map="productContentOut" out-map-add-to-existing="false" /> -->
+                        <service-call name="vsf.ProductServices.find#ProductContentList" out-map="productContentOut" in-map="[productId:virtualProductId?:orderItemRaw.productId, locale:locale]" out-map-add-to-existing="false" />
 
+                        <set field="nameContent" from="productContentOut.productContentList.find({ it.productContentTypeEnumId == 'PcntProductName'})" />
+                        <if condition="nameContent?.contentLocation">
+                            <then>
+                                <set field="productName" from="ec.resource.getLocationText(nameContent?.contentLocation, true)?:orderItemRaw.itemDescription" />
+                            </then>
+                            <else>
+                                <set field="productName" from="nameContent?.description?:orderItemRaw.itemDescription" />
+                            </else>
+                        </if>
+
+                        <set field="coverImageUrl" from="productContentOut?.productContentList.find({it.productContentTypeEnumId=='PcntImageMedium'})?.contentLocation" />
+                        <!-- <if condition="!coverImageUrl">
+                            <service-call name="vsf.ProductServices.find#ProductContent" in-map="[productId:virtualProductId, productContentTypeEnumId:'PcntImageMedium']" out-map="virtualProductContentOut" out-map-add-to-existing="false" />
+                            <set field="coverImageUrl" from="virtualProductContentOut?.productContent?.contentLocation" />
+                        </if> -->
+                    </if>
+                    
+                    <!-- <set field="orderItemUnitTotal" type="BigDecimal" from="orderItemRaw.unitAmount"/>
+                    <set field="orderItemUnitListTotal" type="BigDecimal" from="orderItemRaw.unitListPrice"/>
+                    <if condition="orderItemRaw.orderItemSeqId in orderItemWithChildrenSet">
+                        <filter-map-list list="orderItemListRaw" to-list="childrenListRaw">
+                            <field-map field-name="parentItemSeqId" from="orderItemRaw.orderItemSeqId" />
+                        </filter-map-list>
+                        <iterate list="childrenListRaw" entry="childrenRawItem">
+                            <if condition="taxItems.contains(childrenRawItem.itemTypeEnumId) || discountItems.contains(childrenRawItem.itemTypeEnumId)">
+                                <set field="unitTaxAmount" from="childrenRawItem.unitAmount.divide(orderItemRaw.quantity as BigDecimal, 3, BigDecimal.ROUND_HALF_UP)"/>
+                                <set field="orderItemUnitTotal" from="orderItemUnitTotal + unitTaxAmount"/>
+                                <set field="orderItemUnitListTotal" from="orderItemUnitListTotal + unitTaxAmount"/>    
+                            </if>
+                        </iterate>
+                    </if> -->
                     <script>
                         <![CDATA[
+                            def orderItemTotals = getOrderItemTotalWithChildren(orderItemRaw, null, true)
                             orderItemProductList.add([
                                 orderItemSeqId: orderItemRaw.orderItemSeqId,
                                 parentItemSeqId: orderItemRaw.parentItemSeqId,
@@ -479,14 +566,14 @@ along with this software (see the LICENSE.md file). If not, see
                                     productId: orderItemRaw.productId, 
                                     productSlug: slugOut.productSlug,
                                     productSku: slugOut.productSku,
-                                    coverImageUrl: productContentOut?.productContent?.contentLocation,
+                                    coverImageUrl: coverImageUrl,
                                     virtual: isVariant ? [productId: virtualProductId, productSlug: virtualSlugOut.productSlug, productSku:virtualSlugOut.productSku] : null
                                 ],
                                 quantity: orderItemRaw.quantity,
                                 quantityUnit: quantityUom?.description,
-                                unitAmount: orderItemRaw.unitAmount,
-                                unitListPrice: orderItemRaw.unitListPrice,
-                                itemDescription: orderItemRaw.itemDescription,
+                                unitAmount: orderItemTotals.orderItemUnitTotal,
+                                unitListPrice: orderItemTotals.orderItemUnitListTotal,
+                                itemDescription: productName?:orderItemRaw.itemDescription,
                                 variantFeatures: variantFeatures
                             ])
                         ]]>
@@ -603,7 +690,6 @@ along with this software (see the LICENSE.md file). If not, see
             <set field="carrierPartyId" from="'_NA_'" />
             <set field="shipmentMethodEnumId" from="null" />
             <set field="sessionAttributes" from="ec.web.sessionAttributes" />
-
             <!-- Look for an existing cart -->
             <service-call name="vsf.CartServices.get#ActiveOrderAndCustomer" out-map="context" />
             <set field="orderId" from="cartOrderId" />
@@ -611,8 +697,8 @@ along with this software (see the LICENSE.md file). If not, see
             <service-call name="mantle.order.OrderServices.add#OrderProductQuantity" in-map="context + [salesChannelEnumId:'ScWeb']" out-map="addOut" />
 
             <!-- Update session attributes -->
-            <set field="sessionAttributes.cartOrderId" from="addOut.orderId" />
-            <set field="sessionAttributes.productStoreId" from="sessionAttributes.productStoreId?:productStoreId" />
+            <set field="ec.web.sessionAttributes.cartOrderId" from="addOut.orderId" />
+            <set field="ec.web.sessionAttributes.productStoreId" from="sessionAttributes.productStoreId?:productStoreId" />
 
             <!-- Get cart info -->
             <service-call name="vsf.CartServices.get#CartInfo" out-map="context" />
@@ -754,6 +840,8 @@ along with this software (see the LICENSE.md file). If not, see
         <implements service="vsf.CartServices.interface#ShippingOptions" />
         <actions>
             <service-call name="vsf.CartServices.get#ActiveOrderAndCustomer" out-map="context" />
+            <script>Locale localeL = Locale.forLanguageTag(locale)</script>
+
             <if condition="!cartOrderId">
                 <return error="true" message="Cart is empty" />
             </if>
@@ -788,7 +876,7 @@ along with this software (see the LICENSE.md file). If not, see
                         shipmentMethodId: shippingOption.shipmentMethodEnumId,
                         carrierId: shippingOption.carrierPartyId,
                         carrierName: shippingOption.carrierName,
-                        description: shippingOption.shipmentMethodDescription,
+                        description: ec.l10n.localize(shippingOption.shipmentMethodDescription,localeL),
                         shippingTotal: shippingOption.shippingTotal?:0,
                     ])
                 </script>
@@ -845,6 +933,8 @@ along with this software (see the LICENSE.md file). If not, see
         </out-parameters>
         <actions>
             <service-call name="vsf.CartServices.get#ActiveOrderAndCustomer" out-map="context" />
+            <script>Locale localeL = Locale.forLanguageTag(locale)</script>
+
             <if condition="!cartOrderId">
                 <return error="true" message="Cart is empty" />
             </if>
@@ -860,7 +950,7 @@ along with this software (see the LICENSE.md file). If not, see
                 <script>
                     paymentOptions.add([
                         paymentMethodId: paymentInstrument.enumId,
-                        description: paymentInstrument.description,
+                        description: ec.l10n.localize(paymentInstrument.description,localeL),
                     <!-- unique by payment instrument, no need to expose this -->
                     <!-- paymentGatewayConfigId: storePaymentGateway.paymentGatewayConfigId, -->
                     ])
@@ -900,6 +990,8 @@ along with this software (see the LICENSE.md file). If not, see
         </out-parameters>
         <actions>
             <service-call name="vsf.CartServices.get#ActiveOrderAndCustomer" out-map="context" />
+            <script>Locale localeL = Locale.forLanguageTag(locale)</script>
+
             <if condition="!cartOrderId">
                 <return message="Cart is empty" public="true" type="warning" />
             </if>
@@ -956,6 +1048,20 @@ along with this software (see the LICENSE.md file). If not, see
                 <log level="error" message="Authorize Payment failed because total order (${orderHeader.grandTotal}) is different to authorize amount (${authResult.totalAuthorized})" />
             </if> -->
             <if condition="!requiresPayment">
+                <set field="paymentMap" from="[
+                    orderId: orderPart.orderId,
+                    orderPartSeqId: orderPart.orderPartSeqId,
+                    paymentTypeEnumId: 'PtInvoicePayment',
+                    paymentInstrumentEnumId: 'PiCod',
+                    amount: orderHeader.grandTotal,
+                    amountUomId: orderHeader.currencyUomId,
+                    statusId: 'PmntPromised',
+                    fromPartyId: orderPart.customerPartyId,
+                    toPartyId: orderPart.vendorPartyId,
+                ]" />
+                <!-- Create payment -->
+                <service-call name="mantle.account.PaymentServices.create#Payment" in-map="paymentMap" />
+
                 <!-- place order -->
                 <service-call name="mantle.order.OrderServices.place#Order" in-map="[orderId:orderId]" out-map="placeOrderResult" />
                 <set field="statusChanged" from="placeOrderResult.statusChanged" />
