@@ -21,7 +21,7 @@ along with this software (see the LICENSE.md file). If not, see
     <!-- PASSWORD RESET TEKMPLATE -->
     <moqui.basic.email.EmailTemplate emailTemplateId="VSF_PASSWORD_RESET" description="Default Password Reset" emailServerId="SYSTEM"
     emailTypeEnumId="EMT_PWD_RESET" bodyScreenLocation="component://VsfRestStore/screen/PasswordReset.xml" webappName="webroot"
-    fromAddress="example@company.com" ccAddresses="" bccAddresses="" subject="Password Reset" sendPartial="Y"/>
+    fromAddress="no-reply@example.com" ccAddresses="" bccAddresses="" subject="Password Reset" sendPartial="Y"/>
 
 </entity-facade-xml>
             

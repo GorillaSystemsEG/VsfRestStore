@@ -16,10 +16,15 @@ along with this software (see the LICENSE.md file). If not, see
 
     <!-- Timestamp: 1640988000000 01/01/2022 00:00:00 -->
 
+    <!-- store setting used for dynamically setting the productStoreId depending on the hostname -->
+    <moqui.basic.Enumeration enumCode="product_store_id_from_hostname" description="Product Store ID From Hostname" enumId="PsstHostname" enumTypeId="ProductStoreSettingType" />
+    <!-- <moqui.basic.Enumeration enumCode="homePath" description="Base path for store application" enumId="PsstHomePath" enumTypeId="ProductStoreSettingType"/> -->
+    <!-- <moqui.basic.Enumeration enumCode="store_path" description="Base path for store's product list" enumId="PsstStorePath" enumTypeId="ProductStoreSettingType"/> -->
+
     <!-- ==== Product Store ==== -->
-    <mantle.product.store.ProductStore productStoreId="POPC_DEFAULT" defaultLocale="en_US" defaultCurrencyUomId="USD" storeDomain="demo.moqui.org" profileUrlPath="" productDataDocumentId="VsfProduct">
+    <!-- <mantle.product.store.ProductStore productStoreId="POPC_DEFAULT" defaultLocale="en_US" defaultCurrencyUomId="USD" storeDomain="demo.moqui.org" profileUrlPath="" productDataDocumentId="VsfProduct">
         <settings settingTypeEnumId="PsstHostname" settingValue="localhost" fromDate="1640988000000" />
-    </mantle.product.store.ProductStore>
+    </mantle.product.store.ProductStore> -->
 
     <mantle.product.store.ProductStoreDataDocument productStoreId="POPC_DEFAULT" typeEnumId="PsdtProduct" dataDocumentId="VsfProduct" />
 
