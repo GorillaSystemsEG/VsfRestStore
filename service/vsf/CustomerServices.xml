@@ -105,7 +105,7 @@ along with this software (see the LICENSE.md file). If not, see
         <actions>
             <!-- TODO: TEMP FIX THIS AFTER VSF API CLIENT UPDATE -->
             <entity-find-one entity-name="mantle.product.store.ProductStore" value-field="productStore"/>
-            <set field="ownerPartyId" from="productStore?.organizationPartyId?:'ORG_ATIIQ'"/>
+            <set field="ownerPartyId" from="productStore?.organizationPartyId?:'POPC_DEFAULT'"/>
             <!-- create account and login -->
             <service-call name="mantle.party.PartyServices.create#Account" in-map="context + [newPassword:password, newPasswordVerify:passwordVerify, roleTypeId:'Customer', ownerPartyId:ownerPartyId, loginAfterCreate:true]" out-map="customerInfo" />
             <service-call name="mantle.party.PartyServices.set#PartyClassification" in-map="[partyId:customerInfo.partyId, partyClassificationId:'CustConsumer']" />
