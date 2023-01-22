@@ -65,8 +65,10 @@ along with this software (see the LICENSE.md file). If not, see
                     <parameter name="address2" />
                     <parameter name="postalCode" />
                     <parameter name="city" />
+                    <parameter name="cityId" />
                     <parameter name="stateId" />
                     <parameter name="countryId" />
+                    <parameter name="cityName" />
                     <parameter name="stateName" />
                     <parameter name="countryName" />
                     <parameter name="phone" type="Map">
@@ -82,6 +84,7 @@ along with this software (see the LICENSE.md file). If not, see
     <!-- Login and Register for eCommerce -->
     <service verb="register" noun="Customer" authenticate="anonymous-all">
         <in-parameters>
+            <parameter name="productStoreId" />
             <parameter name="firstName" required="true" />
             <parameter name="middleName" />
             <parameter name="lastName" required="true" />
@@ -100,8 +103,12 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="customerInfo" type="Map" />
         </out-parameters>
         <actions>
+            <!-- TODO: TEMP FIX THIS AFTER VSF API CLIENT UPDATE -->
+            <entity-find-one entity-name="mantle.product.store.ProductStore" value-field="productStore"/>
+            <set field="ownerPartyId" from="productStore?.organizationPartyId?:'ORG_ATIIQ'"/>
             <!-- create account and login -->
-            <service-call name="mantle.party.PartyServices.create#Account" in-map="context + [newPassword:password, newPasswordVerify:passwordVerify, roleTypeId:'Customer', loginAfterCreate:true]" out-map="customerInfo" />
+            <service-call name="mantle.party.PartyServices.create#Account" in-map="context + [newPassword:password, newPasswordVerify:passwordVerify, roleTypeId:'Customer', ownerPartyId:ownerPartyId, loginAfterCreate:true]" out-map="customerInfo" />
+            <service-call name="mantle.party.PartyServices.set#PartyClassification" in-map="[partyId:customerInfo.partyId, partyClassificationId:'CustConsumer']" />
 
             <if condition="ec.user.userAccount != null">
                 <set field="customerPartyId" from="ec.user.userAccount.partyId" />
@@ -155,13 +162,20 @@ along with this software (see the LICENSE.md file). If not, see
             <entity-find-one entity-name="moqui.security.UserAccount" value-field="userAccount" cache="false">
                 <field-map field-name="username" />
             </entity-find-one>
+            <if condition="!userAccount">
+                <entity-find-one entity-name="moqui.security.UserAccount" value-field="userAccount" cache="false">
+                    <field-map field-name="emailAddress" from="username" />
+                </entity-find-one>
+            </if>
             <if condition="userAccount?.requirePasswordChange == 'Y'">
                 <set field="forcePasswordChange" value="true" type="Boolean" />
                 <return />
             </if>
-            <script>ec.user.loginUser(username, password)</script>
-
+            <script>ec.user.loginUser(userAccount?.username?:username, password)</script>
+            <!-- update locale, if cookie is available -->
+            <service-call name="vsf.UtilServices.get#LocaleFromCookies" out-map="context" />
             <service-call name="vsf.CustomerServices.postLogin#Customer" in-map="context" out-map="context" />
+            <service-call name="mantle.party.PartyServices.set#PartyClassification" in-map="[partyId:userAccount.partyId, partyClassificationId:'CustConsumer']" />
         </actions>
     </service>
 
@@ -327,11 +341,14 @@ along with this software (see the LICENSE.md file). If not, see
 
     <service verb="reset" noun="Password" authenticate="anonymous-all">
         <in-parameters>
+            <parameter name="productStoreId" required="true" />
             <parameter name="email" />
-            <parameter name="bodyParameters" type="Map" default="[:]" />
-            <parameter name="emailTemplateId" default-value="VSF_PASSWORD_RESET" />
+            <!-- <parameter name="bodyParameters" type="Map" default="[:]" />
+            <parameter name="emailTemplateId" default-value="VSF_PASSWORD_RESET" /> -->
         </in-parameters>
         <actions>
+            <service-call name="vsf.UtilServices.get#LocaleFromCookies" out-map="context" />
+
             <!-- TODO make sure email is for consumer (ecommerce user) to avoid resetting moqui users  -->
             <!-- <service-call name="org.moqui.impl.UserServices.reset#Password" in-map="[username: email]" out-map="response" /> -->
 
@@ -345,12 +362,6 @@ along with this software (see the LICENSE.md file). If not, see
                 <return />
             </if>
 
-            <!-- make sure we have an email address to send to -->
-            <if condition="!userAccount.emailAddress">
-                <message public="true" type="danger">Account with username ${username} does not have an email address</message>
-                <return error="true" message="Account has no email address" />
-            </if>
-
             <!-- reset the password to a random value -->
             <set field="resetPassword" from="getRandomString(36)" />
             <set field="passwordNode" from="ec.ecfi.confXmlRoot.first('user-facade').first('password')" />
@@ -359,18 +370,44 @@ along with this software (see the LICENSE.md file). If not, see
             <entity-update value-field="userAccount" />
 
             <!-- send an email with the new password -->
-            <service-call name="org.moqui.impl.EmailServices.send#EmailTemplate" async="true">
-                <field-map field-name="emailTemplateId" />
-                <field-map field-name="toAddresses" from="userAccount.emailAddress" />
-                <field-map field-name="bodyParameters" from="bodyParameters + [userAccount:userAccount, resetPassword:resetPassword, emailAddress:userAccount.emailAddress]" />
-            </service-call>
+            <service-call name="vsf.CustomerServices.send#PasswordResetEmail" in-map="[productStoreId:productStoreId, userAccount:userAccount, resetPassword:resetPassword, toAddresses: email, locale:locale]" async="true" />
 
-            <message public="true" type="success">
-                A reset password was sent by email to ${userAccount.emailAddress}. This password may only be used to change your password. Your current password is still valid.
-            </message>
+        </actions>
+    </service>
 
-            <if condition="userAccount.requirePasswordChange == 'Y'">
-                <message public="true" type="info">You must change your password before login.</message>
+    <service verb="send" noun="PasswordResetEmail" authenticate="anonymous-view">
+        <in-parameters>
+            <parameter name="productStoreId" required="true" />
+            <parameter name="userAccount" type="EntityValue" required="true" />
+            <parameter name="resetPassword" required="true" />
+            <parameter name="toAddresses" required="true" />
+            <parameter name="emailTypeEnumId" default-value="PsetResetPassword" />
+            <parameter name="locale" />
+        </in-parameters>
+        <actions>
+            <entity-find-one entity-name="mantle.product.store.ProductStore" value-field="productStore">
+                <field-map field-name="productStoreId" />
+            </entity-find-one>
+            <entity-find entity-name="mantle.product.store.ProductStoreEmail" list="storeEmailList">
+                <date-filter />
+                <econdition field-name="productStoreId" />
+                <econdition field-name="emailTypeEnumId" />
+            </entity-find>
+            <if condition="storeEmailList">
+                <!-- send email for each configured -->
+                <iterate list="storeEmailList" entry="storeEmail">
+                    <if condition="!storeEmail.emailTemplateId">
+                        <continue />
+                    </if>
+                    <set field="bccAddresses" from="storeEmail?.template?.bccAddresses?:null" />
+                    <set field="toUserId" from="userAccount.userId" />
+
+                    <!-- simple bodyParameters, let the screen do data prep -->
+                    <set field="bodyParameters" from="[userAccount:userAccount, productStore:productStore, resetPassword:resetPassword, locale:locale, headerImagePath:storeEmail.headerImagePath,storeDomain:productStore.storeDomain,profileUrlPath:productStore.profileUrlPath]" />
+
+                    <service-call name="org.moqui.impl.EmailServices.send#EmailTemplate" out-map="sendOut" out-map-add-to-existing="false" in-map="[emailTemplateId:storeEmail.emailTemplateId, emailTypeEnumId:emailTypeEnumId, toAddresses:toAddresses,bccAddresses:bccAddresses, bodyParameters:bodyParameters, toUserId:toUserId]" />
+                    <message>Email sent to ${toAddresses}${sendOut.emailMessageId ? ', message ID ' + sendOut.emailMessageId : ''}</message>
+                </iterate>
             </if>
         </actions>
     </service>
@@ -386,7 +423,15 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="passwordIssues" type="Boolean" />
         </out-parameters>
         <actions>
-            <set field="username" from="email" />
+            <entity-find-one entity-name="moqui.security.UserAccount" value-field="userAccount">
+                <field-map field-name="emailAddress" from="email" />
+            </entity-find-one>
+            <if condition="userAccount">
+                <set field="username" from="userAccount.username" />
+                <else>
+                    <set field="username" from="email" />
+                </else>
+            </if>
             <set field="oldPassword" from="token" />
             <set field="newPasswordVerify" from="newPassword" />
             <service-call name="org.moqui.impl.UserServices.update#Password" in-map="context" out-map="context" />
@@ -396,6 +441,8 @@ along with this software (see the LICENSE.md file). If not, see
     <service verb="get" noun="ShippingAddresses">
         <implements service="vsf.CustomerServices.interface#CustomerAddressInfo" />
         <actions>
+            <!-- get locale -->
+            <service-call name="vsf.UtilServices.get#LocaleFromCookies" out-map="context" />
             <set field="sessionAttributes" from="ec.web.sessionAttributes" />
             <set field="partyId" from="ec.user.userAccount?.partyId ?: sessionAttributes.customerPartyId" />
             <if condition="!partyId">
@@ -406,6 +453,10 @@ along with this software (see the LICENSE.md file). If not, see
 
             <set field="postalAddressList" from="[]" />
             <iterate list="shippingContactListInfo.postalAddressList" entry="postalAddress">
+                <set field="cityGeo" from="postalAddress?.postalAddress?.cityGeo" />
+                <set field="stateGeo" from="postalAddress?.postalAddressStateGeo" />
+                <set field="countryGeo" from="postalAddress?.postalAddressCountryGeo" />
+
                 <script>
                     postalAddressList.add([
                         addressId: postalAddress?.postalContactMechId,
@@ -416,8 +467,10 @@ along with this software (see the LICENSE.md file). If not, see
                         city: postalAddress?.postalAddress?.city,
                         stateId: postalAddress?.postalAddressStateGeo?.geoId,
                         countryId: postalAddress?.postalAddress?.countryGeoId,
-                        stateName: postalAddress?.postalAddressStateGeo?.geoName,
-                        countryName: postalAddress?.postalAddressCountryGeo?.geoName,
+                        cityId: postalAddress?.postalAddress?.cityGeoId,
+                        cityName: locale=='ar'?(cityGeo?.geoNameLocal):cityGeo?.geoName,
+                        stateName: locale=='ar'?(stateGeo?.geoNameLocal):stateGeo?.geoName,
+                        countryName: locale=='ar'?(countryGeo?.geoNameLocal):countryGeo?.geoName,
                         phone: postalAddress?.telecomNumber
                     ])
                 </script>
@@ -433,6 +486,7 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="address2" />
             <parameter name="postalCode" />
             <parameter name="city" />
+            <parameter name="cityId" />
             <parameter name="stateId" />
             <parameter name="countryId" />
             <parameter name="countryCode">
@@ -457,6 +511,7 @@ along with this software (see the LICENSE.md file). If not, see
             <set field="postalContactMechPurposeId" value="PostalShippingDest" />
             <set field="countryGeoId" from="countryId" />
             <set field="stateProvinceGeoId" from="stateId" />
+            <set field="cityGeoId" from="cityId" />
             <set field="attnName" from="alias" />
 
             <!-- Store the address -->
@@ -475,6 +530,7 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="address2" />
             <parameter name="postalCode" />
             <parameter name="city" />
+            <parameter name="cityId" />
             <parameter name="stateId" />
             <parameter name="countryId" />
             <parameter name="countryCode">
@@ -500,6 +556,7 @@ along with this software (see the LICENSE.md file). If not, see
             <set field="postalContactMechId" from="addressId" />
             <set field="countryGeoId" from="countryId" />
             <set field="stateProvinceGeoId" from="stateId" />
+            <set field="cityGeoId" from="cityId" />
             <set field="attnName" from="alias" />
 
             <!-- TODO: if no customerPartyId call service to create one now and set in session (no user account aka 'anonymous') -->
@@ -635,5 +692,192 @@ along with this software (see the LICENSE.md file). If not, see
         </actions>
     </service>
 
-    
+    <service verb="create" noun="ContactRequest">
+        <in-parameters>
+            <parameter name="firstName" />
+            <parameter name="lastName" />
+            <parameter name="emailAddress" />
+            <parameter name="description" required="true" />
+            <parameter name="countryCode">
+                <text-digits />
+            </parameter>
+            <parameter name="areaCode">
+                <text-digits />
+            </parameter>
+            <parameter name="contactNumber">
+                <matches regexp="^\d\d[-\. \d]*\d\d$" message="Please enter a valid phone number" />
+            </parameter>
+        </in-parameters>
+        <actions>
+            <!-- Check if customer is logged in -->
+            <set field="sessionAttributes" from="ec.web.sessionAttributes" />
+            <set field="customerPartyId" from="ec.user.userAccount?.partyId ?: sessionAttributes.customerPartyId" />
+
+            <!-- Note create#ContactRequestReCaptcha handles requiring a customerPartyId or firstName/lastName + email verification -->
+            <service-call name="mantle.request.RequestServices.create#ContactRequestReCaptcha" in-map="context" out-map="context" />
+            <log message="context ${context}" />
+            <if condition="customerPartyId &amp;&amp; (countryCode &amp;&amp; areaCode &amp;&amp; contactNumber)">
+                <service-call name="mantle.party.ContactServices.store#PartyContactInfo" in-map="[partyId:customerPartyId, countryCode:countryCode, areaCode:areaCode, contactNumber:contactNumber, telecomContactMechPurposeId:'PhonePrimary']" out-map="context" />
+            </if>
+        </actions>
+    </service>
+
+    <service verb="create" noun="CustomSalesRequest">
+        <in-parameters>
+            <parameter name="firstName" />
+            <parameter name="lastName" />
+            <parameter name="emailAddress" />
+            <parameter name="description" required="true" />
+            <parameter name="countryCode">
+                <text-digits />
+            </parameter>
+            <parameter name="areaCode">
+                <text-digits />
+            </parameter>
+            <parameter name="contactNumber">
+                <matches regexp="^\d\d[-\. \d]*\d\d$" message="Please enter a valid phone number" />
+            </parameter>
+        </in-parameters>
+        <actions>
+            <!-- Check if customer is logged in -->
+            <set field="sessionAttributes" from="ec.web.sessionAttributes" />
+            <set field="customerPartyId" from="ec.user.userAccount?.partyId ?: sessionAttributes.customerPartyId" />
+
+            <!-- Note create#ContactRequestReCaptcha handles requiring a customerPartyId or firstName/lastName + email verification -->
+            <service-call name="mantle.request.RequestServices.create#ContactRequestReCaptcha" in-map="context" out-map="context" />
+            <if condition="customerPartyId &amp;&amp; (countryCode &amp;&amp; areaCode &amp;&amp; contactNumber)">
+                <service-call name="mantle.party.ContactServices.store#PartyContactInfo" in-map="[partyId:customerPartyId, countryCode:countryCode, areaCode:areaCode, contactNumber:contactNumber, telecomContactMechPurposeId:'PhonePrimary']" out-map="context" />
+            </if>
+        </actions>
+    </service>
+
+    <service verb="create" noun="CustomerRFQ">
+        <in-parameters>
+            <parameter name="statusId" default-value="ReqSubmitted" />
+            <parameter name="priority" type="Long" default="3" />
+            <parameter name="requestTypeEnumId" default-value="RqtQuote" />
+            <parameter name="requestResolutionEnumId" default-value="RrUnresolved" />
+            <parameter name="requestDate" default="ec.user.nowTimestamp" />
+            <parameter name="productStoreId" />
+            <parameter name="requestName" />
+            <parameter name="description" required="true" />
+
+            <parameter name="filedByPartyId" default="ec.user.userAccount?.partyId" />
+            <parameter name="customerPartyId" default="ec.user.userAccount?.partyId" />
+            <parameter name="firstName" />
+            <parameter name="lastName" />
+
+            <parameter name="emailContactMechId" />
+            <parameter name="emailAddress">
+                <text-email />
+            </parameter>
+            <parameter name="countryCode">
+                <text-digits />
+            </parameter>
+            <parameter name="areaCode">
+                <text-digits />
+            </parameter>
+            <parameter name="contactNumber">
+                <matches regexp="^\d\d[-\. \d]*\d\d$" message="Please enter a valid phone number" />
+            </parameter>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="requestId" />
+            <parameter name="customerPartyId" />
+        </out-parameters>
+        <actions>
+            <set field="visitId" from="ec.user.visitId" />
+
+            <if condition="!customerPartyId">
+                <if condition="!firstName || !lastName || !emailAddress">
+                    <message public="true" type="warning">Please enter your first name, last name, and email address</message>
+                    <return error="true" message="Name or email missing" />
+                </if>
+                <set field="firstName" from="firstName.trim()" />
+
+                <!-- search for existing party by email address -->
+                <entity-find entity-name="mantle.party.contact.PartyContactMechInfo" list="emailPcmList">
+                    <date-filter />
+                    <econdition field-name="infoString" from="emailAddress" />
+                </entity-find>
+                <iterate list="emailPcmList" entry="emailPcm">
+                    <entity-find-one entity-name="mantle.party.PartyDetail" value-field="party">
+                        <field-map field-name="partyId" from="emailPcm.partyId" />
+                    </entity-find-one>
+                    <if condition="party.disabled == 'Y' || party.partyTypeEnumId != 'PtyPerson'">
+                        <continue />
+                    </if>
+                    <if condition="!firstName.equalsIgnoreCase(party.firstName?.trim())">
+                        <continue />
+                    </if>
+                    <set field="customerPartyId" from="emailPcm.partyId" />
+                    <set field="emailContactMechId" from="emailPcm.contactMechId" />
+                    <break />
+                </iterate>
+
+                <!-- create a party with the name -->
+                <if condition="!customerPartyId">
+                    <service-call name="mantle.party.PartyServices.create#Person" out-map="createPartyOut" in-map="[firstName:firstName, lastName:lastName, roleTypeId:'Customer']" />
+                    <set field="customerPartyId" from="createPartyOut.partyId" />
+                </if>
+
+                <set field="filedByPartyId" from="customerPartyId" />
+            </if>
+            <if condition="!emailContactMechId">
+                <if condition="emailAddress">
+                    <then>
+                        <!-- find a matching one, if none create -->
+                        <set field="emailAddress" from="emailAddress.trim()" />
+                        <entity-find entity-name="mantle.party.contact.PartyContactMechInfo" list="existingEmailList">
+                            <date-filter />
+                            <econdition field-name="partyId" from="customerPartyId" />
+                            <econdition field-name="infoString" from="emailAddress" />
+                        </entity-find>
+                        <if condition="existingEmailList">
+                            <then>
+                                <set field="emailContactMechId" from="existingEmailList[0].contactMechId" />
+                            </then>
+                            <else>
+                                <service-call name="mantle.party.ContactServices.create#EmailAddress" out-map="emailOut" in-map="[partyId:customerPartyId, emailAddress:emailAddress, contactMechPurposeId:'EmailPrimary']" />
+                                <set field="emailContactMechId" from="emailOut.contactMechId" />
+                            </else>
+                        </if>
+                    </then>
+                    <else>
+                        <entity-find entity-name="mantle.party.contact.PartyContactMechInfo" list="existingEmailList">
+                            <date-filter />
+                            <econdition field-name="partyId" from="customerPartyId" />
+                            <econdition field-name="contactMechTypeEnumId" value="CmtEmailAddress" />
+                        </entity-find>
+                        <set field="emailContactMechId" from="existingEmailList ? existingEmailList[0].contactMechId : null" />
+                    </else>
+                </if>
+            </if>
+            <if condition="!emailContactMechId">
+                <message public="true" type="warning">Please enter your email address</message>
+                <return error="true" message="Email record missing" />
+            </if>
+
+            <if condition="customerPartyId &amp;&amp; (countryCode &amp;&amp; areaCode &amp;&amp; contactNumber)">
+                <service-call name="mantle.party.ContactServices.store#PartyContactInfo" in-map="[partyId:customerPartyId, countryCode:countryCode, areaCode:areaCode, contactNumber:contactNumber, telecomContactMechPurposeId:'PhonePrimary']" out-map="context" />
+            </if>
+
+            <service-call name="create#mantle.request.Request" out-map="context" in-map="context" />
+            <service-call name="create#mantle.request.RequestParty" in-map="[requestId:requestId, partyId:filedByPartyId, roleTypeId:'Reporter', fromDate:ec.user.nowTimestamp]" />
+            <service-call name="create#mantle.request.RequestParty" in-map="[requestId:requestId, partyId:customerPartyId, roleTypeId:'Customer', fromDate:ec.user.nowTimestamp]" />
+
+            <message public="true" type="success">Thank you, we have received your request. Your request number is ${requestId}</message>
+        </actions>
+    </service>
+
+    <service verb="create" noun="CustomerRFQReCaptcha">
+        <implements service="vsf.CustomerServices.create#CustomerRFQ" />
+        <in-parameters>
+            <parameter name="reCaptchaToken" />
+        </in-parameters>
+        <actions>
+            <service-call name="org.moqui.impl.GoogleServices.verify#ReCaptcha" in-map="[reCaptchaToken:reCaptchaToken]" />
+            <service-call name="vsf.CustomerServices.create#CustomerRFQ" in-map="context" out-map="context" />
+        </actions>
+    </service>
 </services>
