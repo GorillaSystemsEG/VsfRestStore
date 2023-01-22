@@ -13,6 +13,25 @@
             <service name="vsf.StoreServices.get#StoreInfo" />
         </method>
     </resource>
+    <resource name="geo" require-authentication="anonymous-view">
+        <method type="get">
+            <service name="vsf.StoreServices.get#Geos" />
+        </method>
+    </resource>
+
+    <!-- Support -->
+    <resource name="contact" require-authentication="anonymous-all">
+        <method type="post">
+            <service name="vsf.CustomerServices.create#ContactRequest" />
+        </method>
+    </resource>
+
+    <!-- Custom -->
+    <resource name="custom" require-authentication="anonymous-all">
+        <method type="post">
+            <service name="vsf.CustomerServices.create#CustomerRFQReCaptcha" />
+        </method>
+    </resource>
 
     <!-- Login and Register -->
     <resource name="login" require-authentication="anonymous-all">
@@ -105,7 +124,7 @@
             <method type="get">
                 <service name="vsf.SearchServices.search#All" />
             </method>
-        </resource>        
+        </resource>
         <resource name="reviews">
             <method type="get">
                 <service name="vsf.ProductServices.get#ProductReviews" />
