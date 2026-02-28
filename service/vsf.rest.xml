@@ -39,6 +39,11 @@
             <service name="vsf.CustomerServices.login#Customer" />
         </method>
     </resource>
+    <resource name="guestCheckout" require-authentication="anonymous-all">
+        <method type="post">
+            <service name="vsf.CustomerServices.setup#GuestCheckout" />
+        </method>
+    </resource>
     <resource name="logout" require-authentication="anonymous-view">
         <method type="get">
             <service name="vsf.CustomerServices.logout#Customer" />
@@ -92,7 +97,7 @@
         </resource> -->
         <!-- END: TODO -->
 
-        <resource name="shippingAddresses">
+        <resource name="shippingAddresses" require-authentication="anonymous-all">
             <method type="get">
                 <service name="vsf.CustomerServices.get#ShippingAddresses" />
             </method>

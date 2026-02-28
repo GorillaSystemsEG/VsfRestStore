@@ -114,6 +114,7 @@ along with this software (see the LICENSE.md file). If not, see
                 <set field="customerPartyId" from="ec.user.userAccount.partyId" />
                 <!-- NOTE: use the web session for attributes such as cartOrderId for security; this won't work in a stateless mode or outside a web session -->
                 <set field="sessionAttributes" from="ec.web.sessionAttributes" />
+                <set field="previousSessionCustomerPartyId" from="sessionAttributes.customerPartyId" />
                 <set field="sessionAttributes.customerPartyId" from="customerPartyId" />
                 <set field="cartOrderId" from="sessionAttributes.cartOrderId" />
 
@@ -121,16 +122,19 @@ along with this software (see the LICENSE.md file). If not, see
                 <if condition="cartOrderId &amp;&amp; customerPartyId">
                     <!-- NOTE: make sure orderHeader has no enteredByPartyId, ie only find those with null to avoid order takeover -->
                     <entity-find-one entity-name="OrderHeader" value-field="orderHeader" auto-field-map="[orderId:cartOrderId]" />
-                    <if condition="!orderHeader.enteredByPartyId">
+                    <if condition="!orderHeader.enteredByPartyId || (previousSessionCustomerPartyId &amp;&amp; orderHeader.enteredByPartyId == previousSessionCustomerPartyId)">
                         <set field="orderHeader.enteredByPartyId" from="customerPartyId" />
                         <entity-update value-field="orderHeader" />
 
-                        <!-- NOTE: make sure cartOrder has no customerPartyId, ie only find those with null to avoid order takeover -->
+                        <!-- allow takeover only if cart order part is unclaimed or belongs to the same guest party from this session -->
                         <!-- TODO: Handle multiple OrderParts -->
                         <entity-find entity-name="OrderPart" list="orderPartList">
                             <econdition field-name="orderId" from="cartOrderId" />
-                            <econdition field-name="customerPartyId" operator="is-null" />
-                        </entity-find>
+                            <econditions combine="or">
+                                <econdition field-name="customerPartyId" operator="is-null" />
+                                <econdition field-name="customerPartyId" from="previousSessionCustomerPartyId" ignore="!previousSessionCustomerPartyId" />
+                            </econditions>
+                        </entity-find>                       
                         <if condition="orderPartList">
                             <set field="orderPart" from="orderPartList[0]" />
                             <set field="orderPart.customerPartyId" from="customerPartyId" />
@@ -143,6 +147,100 @@ along with this software (see the LICENSE.md file). If not, see
 
                 <!-- get customer info for convenience -->
                 <service-call name="vsf.CustomerServices.get#CustomerInfo" in-map="context" out-map="customerInfo" />
+            </if>
+        </actions>
+    </service>
+
+    <service verb="setup" noun="GuestCheckout" authenticate="anonymous-all">
+        <in-parameters>
+            <parameter name="emailAddress" required="true">
+                <text-email />
+            </parameter>
+            <parameter name="firstName" default-value="Guest" />
+            <parameter name="lastName" default-value="Customer" />
+        </in-parameters>
+        <out-parameters>
+            <parameter name="moquiSessionToken" />
+            <parameter name="customerInfo" type="Map" />
+        </out-parameters>
+        <actions>
+            <set field="emailAddress" from="emailAddress.trim()" />
+
+            <!-- prevent guest checkout for emails that already belong to registered accounts -->
+            <entity-find entity-name="moqui.security.UserAccount" list="existingUserAccountList" limit="1" cache="false">
+                <econdition field-name="emailAddress" ignore-case="true" />
+            </entity-find>
+            <set field="existingUserAccount" from="existingUserAccountList?.first"/>
+            <if condition="existingUserAccount">
+                <return error="true" message="Please sign in or reset your password to continue checkout." />
+            </if>
+
+            <!-- reuse an existing guest party in the same session to avoid creating duplicates on retries -->
+            <set field="sessionAttributes" from="ec.web.sessionAttributes" />
+            <set field="existingGuestPartyId" from="!ec.user.userAccount ? sessionAttributes.customerPartyId : null" />
+            <log message="sessionAttributes: ${sessionAttributes}"/>
+            <log message="existingGuestPartyId: ${existingGuestPartyId}"/>
+            <if condition="existingGuestPartyId">
+                <entity-find-one entity-name="mantle.party.PartyDetail" value-field="existingGuestParty">
+                    <field-map field-name="partyId" from="existingGuestPartyId" />
+                </entity-find-one>
+                <log message="existingGuestParty: ${existingGuestParty}"/>
+                <if condition="existingGuestParty?.disabled == 'Y'">
+                    <set field="existingGuestParty" from="null" />
+                </if>
+            </if>
+
+            <set field="customerPartyId" from="existingGuestParty?.partyId" />
+            <if condition="!customerPartyId">
+                <!-- create anonymous party -->
+                <service-call name="mantle.party.PartyServices.create#Person" out-map="createPartyOut" 
+                    in-map="[firstName:firstName, lastName:lastName, roleTypeId:'Customer']" />
+                <set field="customerPartyId" from="createPartyOut.partyId" />
+                <log message="customerPartyId ${customerPartyId}"/>
+                <service-call name="mantle.party.PartyServices.set#PartyClassification" in-map="[partyId:customerPartyId, partyClassificationId:'CustConsumer']" />
+            </if>
+
+            <!-- attach email -->
+            <entity-find entity-name="mantle.party.contact.PartyContactMechInfo" list="existingEmailList">
+                <date-filter />
+                <econdition field-name="partyId" from="customerPartyId" />
+                <econdition field-name="infoString" from="emailAddress" />
+            </entity-find>
+            <if condition="!existingEmailList">
+                <service-call name="mantle.party.ContactServices.create#EmailAddress" out-map="emailOut" 
+                    in-map="[partyId:customerPartyId, emailAddress:emailAddress, contactMechPurposeId:'EmailPrimary']" />
+            </if>
+
+            <!-- set in session -->
+            <set field="sessionAttributes.customerPartyId" from="customerPartyId" />
+            <set field="cartOrderId" from="sessionAttributes.cartOrderId" />
+
+            <!-- update cart order if exists -->
+            <if condition="cartOrderId">
+                <!-- NOTE: make sure orderHeader has no enteredByPartyId, ie only find those with null to avoid order takeover -->
+                <entity-find-one entity-name="OrderHeader" value-field="orderHeader" auto-field-map="[orderId:cartOrderId]" />
+                <if condition="!orderHeader.enteredByPartyId">
+                    <set field="orderHeader.enteredByPartyId" from="customerPartyId" />
+                    <entity-update value-field="orderHeader" />
+
+                    <!-- NOTE: make sure cartOrder has no customerPartyId, ie only find those with null to avoid order takeover -->
+                    <!-- TODO: Handle multiple OrderParts -->
+                    <entity-find entity-name="OrderPart" list="orderPartList">
+                        <econdition field-name="orderId" from="cartOrderId" />
+                        <econdition field-name="customerPartyId" operator="is-null" />
+                    </entity-find>
+                    <if condition="orderPartList">
+                        <set field="orderPart" from="orderPartList[0]" />
+                        <set field="orderPart.customerPartyId" from="customerPartyId" />
+                        <entity-update value-field="orderPart" />
+                    </if>
+                </if>
+            </if>
+
+            <set field="moquiSessionToken" from="ec.web.sessionToken" />
+            <service-call name="vsf.CustomerServices.get#CustomerInfo" in-map="context" out-map="customerInfo" />
+            <if condition="!customerInfo || customerInfo.isEmpty()">
+                <set field="customerInfo" from="[firstName:firstName, lastName:lastName, emailAddress:emailAddress]" />
             </if>
         </actions>
     </service>
@@ -181,6 +279,7 @@ along with this software (see the LICENSE.md file). If not, see
 
     <service verb="logout" noun="Customer" authenticate="anonymous-all">
         <actions>
+            <script>ec.web.sessionAttributes.remove("customerPartyId")</script>
             <script>ec.user.logoutUser()</script>
         </actions>
     </service>
@@ -195,6 +294,7 @@ along with this software (see the LICENSE.md file). If not, see
                 <set field="customerPartyId" from="ec.user.userAccount.partyId" />
                 <!-- NOTE: use the web session for attributes such as cartOrderId for security; this won't work in a stateless mode or outside a web session -->
                 <set field="sessionAttributes" from="ec.web.sessionAttributes" />
+                <set field="previousSessionCustomerPartyId" from="sessionAttributes.customerPartyId" />
                 <set field="sessionAttributes.customerPartyId" from="customerPartyId" />
                 <set field="cartOrderId" from="ec.web.sessionAttributes.cartOrderId" />
 
@@ -218,15 +318,27 @@ along with this software (see the LICENSE.md file). If not, see
                     <else>
                         <!-- no existing open order, if a cartOrderId is in the session set the logged in user as the customer -->
                         <if condition="cartOrderId">
-                            <!-- NOTE: make sure cartOrder has no customerPartyId, ie only find those with null to avoid order takeover -->
-                            <entity-find entity-name="mantle.order.OrderPart" list="orderPartList">
-                                <econdition field-name="orderId" from="cartOrderId" />
-                                <econdition field-name="customerPartyId" operator="is-null" />
-                            </entity-find>
-                            <if condition="orderPartList">
-                                <set field="orderPart" from="orderPartList[0]" />
-                                <set field="orderPart.customerPartyId" from="customerPartyId" />
-                                <entity-update value-field="orderPart" />
+                            <!-- allow takeover only if cart belongs to no one or to the same guest party from this session -->
+                            <entity-find-one entity-name="OrderHeader" value-field="orderHeader" auto-field-map="[orderId:cartOrderId]" />
+                            <if condition="!orderHeader.enteredByPartyId || (previousSessionCustomerPartyId &amp;&amp; orderHeader.enteredByPartyId == previousSessionCustomerPartyId)">
+                                <set field="orderHeader.enteredByPartyId" from="customerPartyId" />
+                                <entity-update value-field="orderHeader" />
+
+                                <entity-find entity-name="mantle.order.OrderPart" list="orderPartList">
+                                    <econdition field-name="orderId" from="cartOrderId" />
+                                    <econdition field-name="customerPartyId" operator="is-null" />
+                                </entity-find>
+                                <if condition="!orderPartList &amp;&amp; previousSessionCustomerPartyId">
+                                    <entity-find entity-name="mantle.order.OrderPart" list="orderPartList">
+                                        <econdition field-name="orderId" from="cartOrderId" />
+                                        <econdition field-name="customerPartyId" from="previousSessionCustomerPartyId" />
+                                    </entity-find>
+                                </if>
+                                <if condition="orderPartList">
+                                    <set field="orderPart" from="orderPartList[0]" />
+                                    <set field="orderPart.customerPartyId" from="customerPartyId" />
+                                    <entity-update value-field="orderPart" />
+                                </if>
                             </if>
                         </if>
                     </else>
@@ -438,7 +550,7 @@ along with this software (see the LICENSE.md file). If not, see
         </actions>
     </service>
 
-    <service verb="get" noun="ShippingAddresses">
+    <service verb="get" noun="ShippingAddresses" authenticate="anonymous-all">
         <implements service="vsf.CustomerServices.interface#CustomerAddressInfo" />
         <actions>
             <!-- get locale -->
@@ -478,7 +590,7 @@ along with this software (see the LICENSE.md file). If not, see
         </actions>
     </service>
 
-    <service verb="create" noun="ShippingAddress">
+    <service verb="create" noun="ShippingAddress" authenticate="anonymous-all">
         <implements service="vsf.CustomerServices.interface#CustomerAddressInfo" />
         <in-parameters>
             <parameter name="alias" />
@@ -521,7 +633,7 @@ along with this software (see the LICENSE.md file). If not, see
         </actions>
     </service>
 
-    <service verb="update" noun="ShippingAddress">
+    <service verb="update" noun="ShippingAddress" authenticate="anonymous-all">
         <implements service="vsf.CustomerServices.interface#CustomerAddressInfo" />
         <in-parameters>
             <parameter name="addressId" />
@@ -567,7 +679,7 @@ along with this software (see the LICENSE.md file). If not, see
         </actions>
     </service>
 
-    <service verb="delete" noun="ShippingAddress">
+    <service verb="delete" noun="ShippingAddress" authenticate="anonymous-all">
         <implements service="vsf.CustomerServices.interface#CustomerAddressInfo" />
         <in-parameters>
             <parameter name="addressId" />
